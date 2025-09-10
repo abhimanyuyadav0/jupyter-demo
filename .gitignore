@@ -4,3 +4,9 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Backend
+backend/venv
+backend/__pycache__
+backend/data
+backend/logs
