@@ -1,0 +1,474 @@
+.connection-manager {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.manager-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+
+.manager-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.save-current-btn,
+.import-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.save-current-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.save-current-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(16, 185, 129, 0.3);
+}
+
+.import-export-btn {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 2px solid #e2e8f0;
+}
+
+.import-export-btn:hover {
+  background: #e2e8f0;
+  color: #374151;
+}
+
+.btn-icon {
+  font-size: 1rem;
+}
+
+/* Import/Export Section */
+.import-export-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  border: 2px solid #e2e8f0;
+}
+
+.export-btn,
+.import-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  background: white;
+  color: #374151;
+  border: 2px solid #e2e8f0;
+}
+
+.export-btn:hover,
+.import-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  transform: translateY(-1px);
+}
+
+/* Connections List */
+.connections-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.no-connections {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+}
+
+.no-conn-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.no-conn-help {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.connection-item {
+  display: flex;
+  align-items: center;
+  width: 45%;
+  justify-content: space-between;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.connection-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.connection-item.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.3);
+}
+
+.connection-item.active::before {
+  content: '✓';
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.connection-info {
+  flex: 1;
+  min-width: 0; /* Allow text truncation */
+}
+
+.connection-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.connection-status {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.connection-name {
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-item.active .connection-name {
+  color: white;
+}
+
+.connection-type {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.connection-item.active .connection-type {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.connection-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.connection-item.active .connection-details {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.connection-host {
+  font-family: 'Monaco', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.connection-time {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.connection-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 1rem;
+}
+
+.edit-btn,
+.delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.edit-btn:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.connection-item.active .edit-btn:hover,
+.connection-item.active .delete-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.connection-name-input {
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
+  color: #374151;
+}
+
+.connection-name-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* New Connection Hint */
+.new-connection-hint {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 0.75rem;
+  border-left: 4px solid #f59e0b;
+}
+
+.new-connection-hint p {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Save Connection Dialog */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.save-dialog {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.save-dialog h4 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 0.5rem;
+}
+
+.save-dialog p {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.save-form {
+  margin-bottom: 2rem;
+}
+
+.save-form label {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.save-form .connection-name-input {
+  margin-bottom: 1rem;
+}
+
+.connection-preview {
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 2px solid #e2e8f0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.cancel-btn,
+.save-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 2px solid #e2e8f0;
+}
+
+.cancel-btn:hover {
+  background: #e2e8f0;
+  color: #374151;
+}
+
+.save-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(16, 185, 129, 0.3);
+}
+
+/* Scrollbar styling */
+.connections-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.connections-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.connections-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.connections-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .connection-manager {
+    padding: 1rem;
+  }
+  
+  .manager-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .manager-actions {
+    justify-content: stretch;
+  }
+  
+  .save-current-btn,
+  .import-export-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .import-export-section {
+    flex-direction: column;
+  }
+  
+  .connection-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 1rem;
+  }
+  
+  .connection-actions {
+    margin-left: 0;
+    margin-top: 0.75rem;
+    justify-content: flex-end;
+  }
+  
+  .connection-host {
+    max-width: none;
+  }
+  
+  .save-dialog {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+  
+  .dialog-actions {
+    flex-direction: column;
+  }
+}

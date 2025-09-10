@@ -87,6 +87,12 @@ const initialState = {
     difficulty: 'all'
   },
   liveDemo: {
+    // Multiple database connections
+    connections: [], // Array of saved connections
+    activeConnectionId: null, // Currently selected connection ID
+    currentConnection: null, // Current active connection object
+    
+    // Legacy single connection support
     isConnected: false,
     connectionType: 'postgresql',
     connectionStatus: 'disconnected',
@@ -155,6 +161,81 @@ const jupyterSlice = createSlice({
     },
     setRealTimeData: (state, action) => {
       state.liveDemo.realTimeData = action.payload;
+    },
+    
+    // Multi-database connection actions
+    addConnection: (state, action) => {
+      const connection = {
+        id: action.payload.id || Date.now().toString(),
+        name: action.payload.name,
+        config: action.payload.config,
+        type: action.payload.type,
+        status: action.payload.status || 'disconnected',
+        lastConnected: action.payload.lastConnected || null,
+        createdAt: action.payload.createdAt || new Date().toISOString()
+      };
+      
+      // Remove existing connection with same ID if exists
+      state.liveDemo.connections = state.liveDemo.connections.filter(conn => conn.id !== connection.id);
+      state.liveDemo.connections.push(connection);
+    },
+    
+    removeConnection: (state, action) => {
+      const connectionId = action.payload;
+      state.liveDemo.connections = state.liveDemo.connections.filter(conn => conn.id !== connectionId);
+      
+      // If removing active connection, clear it
+      if (state.liveDemo.activeConnectionId === connectionId) {
+        state.liveDemo.activeConnectionId = null;
+        state.liveDemo.currentConnection = null;
+        state.liveDemo.isConnected = false;
+        state.liveDemo.connectionStatus = 'disconnected';
+      }
+    },
+    
+    setActiveConnection: (state, action) => {
+      const connectionId = action.payload;
+      const connection = state.liveDemo.connections.find(conn => conn.id === connectionId);
+      
+      if (connection) {
+        state.liveDemo.activeConnectionId = connectionId;
+        state.liveDemo.currentConnection = connection;
+        state.liveDemo.connectionType = connection.type;
+        state.liveDemo.connectionConfig = connection.config;
+        state.liveDemo.isConnected = connection.status === 'connected';
+        state.liveDemo.connectionStatus = connection.status;
+      }
+    },
+    
+    updateConnectionStatus: (state, action) => {
+      const { connectionId, status, lastConnected } = action.payload;
+      const connection = state.liveDemo.connections.find(conn => conn.id === connectionId);
+      
+      if (connection) {
+        connection.status = status;
+        if (lastConnected) {
+          connection.lastConnected = lastConnected;
+        }
+        
+        // Update current connection status if it's the active one
+        if (state.liveDemo.activeConnectionId === connectionId) {
+          state.liveDemo.isConnected = status === 'connected';
+          state.liveDemo.connectionStatus = status;
+        }
+      }
+    },
+    
+    loadSavedConnections: (state, action) => {
+      state.liveDemo.connections = action.payload || [];
+    },
+    
+    updateConnectionName: (state, action) => {
+      const { connectionId, name } = action.payload;
+      const connection = state.liveDemo.connections.find(conn => conn.id === connectionId);
+      
+      if (connection) {
+        connection.name = name;
+      }
     }
   }
 });
@@ -171,6 +252,13 @@ export const {
   setError, 
   setAnalyticsData,
   setConnectionConfig,
-  setRealTimeData
+  setRealTimeData,
+  // Multi-database actions
+  addConnection,
+  removeConnection,
+  setActiveConnection,
+  updateConnectionStatus,
+  loadSavedConnections,
+  updateConnectionName
 } = jupyterSlice.actions;
 export default jupyterSlice.reducer;

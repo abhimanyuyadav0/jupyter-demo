@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setConnectionStatus, setConnectionType, setError, setConnectionConfig } from '../redux/slices/jupyterSlice';
 import { databaseAPI, apiUtils } from '../services/api';
+import ConnectionManager from './ConnectionManager';
 import './DatabaseConnection.css';
 
 const DatabaseConnection = () => {
@@ -17,6 +18,7 @@ const DatabaseConnection = () => {
     }
   );
   const [backendHealth, setBackendHealth] = useState(false);
+  const [showNewConnection, setShowNewConnection] = useState(true);
 
   const databaseTypes = [
     { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', port: '5432' },
@@ -123,26 +125,35 @@ const DatabaseConnection = () => {
     }
   };
 
-  const generateSampleChartData = () => {
-    const data = [];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    
-    months.forEach(month => {
-      data.push({
-        month,
-        sales: Math.floor(Math.random() * 1000) + 500,
-        users: Math.floor(Math.random() * 200) + 100,
-        revenue: Math.floor(Math.random() * 50000) + 25000
-      });
-    });
-    
-    return data;
+
+  const handleConnectionSelect = (connection) => {
+    console.log('Selected connection:', connection.name);
   };
 
   return (
     <div className="database-connection">
-      <div className="connection-form">
-        <h3>Database Connection</h3>
+      {/* Connection Manager */}
+      <ConnectionManager 
+        onConnectionSelect={handleConnectionSelect}
+        showNewConnection={showNewConnection}
+      />
+      
+      {/* New Connection Form */}
+      <div className="new-connection-section">
+        <div className="section-header">
+          <h3>New Database Connection</h3>
+          <button 
+            className={`toggle-btn ${showNewConnection ? 'active' : ''}`}
+            onClick={() => setShowNewConnection(!showNewConnection)}
+          >
+            <span className="btn-icon">{showNewConnection ? '🔼' : '🔽'}</span>
+            {showNewConnection ? 'Hide Form' : 'Show Form'}
+          </button>
+        </div>
+        
+        {showNewConnection && (
+          <div className="connection-form">
+            <div className="form-section">
         
         <div className="db-type-selector">
           <label>Database Type:</label>
@@ -249,10 +260,10 @@ const DatabaseConnection = () => {
             </button>
           )}
         </div>
-      </div>
-
-      <div className="connection-info">
-        <h4>Connection Details</h4>
+            </div>
+            
+            <div className="form-section">
+          <h4>Connection Details</h4>
         <div className="info-cards">
           <div className="info-card">
             <span className="info-label">Type:</span>
@@ -338,6 +349,9 @@ df = pd.read_sql_query("SELECT * FROM your_table", conn)`}
             </pre>
           </div>
         </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -64,6 +64,14 @@
   margin-right: auto;
 }
 
+.header-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
 .connection-status {
   display: flex;
   justify-content: center;

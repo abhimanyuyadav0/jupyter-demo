@@ -1,8 +1,67 @@
 .database-connection {
   padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.new-connection-section {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: white;
+  color: #64748b;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.toggle-btn.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.connection-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
+}
+
+.form-section {
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 2px solid #e2e8f0;
 }
 
 .connection-form h3 {
@@ -251,7 +310,7 @@
 
 /* Responsive Design */
 @media (max-width: 1024px) {
-  .database-connection {
+  .connection-form {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }

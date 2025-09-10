@@ -13,6 +13,7 @@ import DatabaseConnection from './DatabaseConnection';
 import QueryEditor from './QueryEditor';
 import DataVisualization from './DataVisualization';
 import AnalyticsPanel from './AnalyticsPanel';
+import DatabaseSelector from './DatabaseSelector';
 import './LiveDemo.css';
 
 const LiveDemo = () => {
@@ -96,13 +97,17 @@ const LiveDemo = () => {
             Connect to your database and perform real-time analytics using Jupyter-like interface
           </p>
           
-          <div className="connection-status">
-            <div className={`status-indicator ${liveDemo.connectionStatus}`}>
-              <span className="status-dot"></span>
-              <span className="status-text">
-                {liveDemo.connectionStatus === 'connected' ? 'Connected' : 
-                 liveDemo.connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-              </span>
+          <div className="header-controls">
+            <DatabaseSelector showLabel={true} compact={false} />
+            
+            <div className="connection-status">
+              <div className={`status-indicator ${liveDemo.connectionStatus}`}>
+                <span className="status-dot"></span>
+                <span className="status-text">
+                  {liveDemo.connectionStatus === 'connected' ? 'Connected' : 
+                   liveDemo.connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
