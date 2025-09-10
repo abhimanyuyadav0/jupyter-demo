@@ -4,7 +4,7 @@ Configuration settings for the FastAPI backend
 
 import os
 from typing import List
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from pydantic import validator
 
 
