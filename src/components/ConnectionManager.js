@@ -14,6 +14,7 @@ import {
 } from '../redux/slices/jupyterSlice';
 import { connectionStorage } from '../services/connectionStorage';
 import { databaseAPI, apiUtils } from '../services/api';
+import { secureStorage } from '../services/secureStorage';
 import ConnectionModal from './ConnectionModal';
 import './ConnectionManager.css';
 
@@ -102,20 +103,58 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
     try {
       dispatch(setError(null));
 
-      // Use the saved connection config but require password input
-      const connectionData = {
+      let connectionData = {
         ...connection.config,
         db_type: connection.type
       };
 
-      // If no password saved, prompt for it
-      if (!connectionData.password) {
-        const password = prompt(`Enter password for ${connection.name}:`);
-        if (!password) {
-          setConnectingTo(null);
-          return;
+      // Try to load secure credentials if available
+      if (connection.hasSecureCredentials) {
+        try {
+          let masterPassword = '';
+          
+          // Check if master password is set
+          if (!secureStorage.hasMasterPassword()) {
+            dispatch(setError('Master password not set. Please set up secure storage first.'));
+            setConnectingTo(null);
+            return;
+          }
+          
+          // Prompt for master password
+          masterPassword = prompt(`Enter master password to unlock credentials for ${connection.name}:`);
+          if (!masterPassword) {
+            setConnectingTo(null);
+            return;
+          }
+          
+          // Load connection with credentials
+          const connectionWithCreds = await connectionStorage.loadConnectionWithCredentials(connection.id, masterPassword);
+          connectionData = {
+            ...connectionWithCreds.config,
+            db_type: connection.type
+          };
+          
+          console.log('🔓 Credentials loaded from secure storage');
+        } catch (error) {
+          console.warn('⚠️ Failed to load secure credentials:', error);
+          // Fall back to manual password entry
+          const password = prompt(`Failed to load saved credentials. Enter password for ${connection.name}:`);
+          if (!password) {
+            setConnectingTo(null);
+            return;
+          }
+          connectionData.password = password;
         }
-        connectionData.password = password;
+      } else {
+        // No saved credentials, prompt for password
+        if (!connectionData.password) {
+          const password = prompt(`Enter password for ${connection.name}:`);
+          if (!password) {
+            setConnectingTo(null);
+            return;
+          }
+          connectionData.password = password;
+        }
       }
 
       const result = await databaseAPI.connect(connectionData);
@@ -386,9 +425,16 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                   <span className="connection-database">
                     📊 {connection.config.database}
                   </span>
-                  <span className="connection-time">
-                    🕒 {getTimeAgo(connection.lastConnected)}
-                  </span>
+                  <div className="connection-meta">
+                    <span className="connection-time">
+                      🕒 {getTimeAgo(connection.lastConnected)}
+                    </span>
+                    {connection.hasSecureCredentials && (
+                      <span className="secure-indicator" title="Credentials saved securely">
+                        🔒 Secure
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

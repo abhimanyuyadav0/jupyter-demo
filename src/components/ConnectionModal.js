@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../redux/slices/jupyterSlice';
 import { databaseAPI, apiUtils } from '../services/api';
 import { connectionStorage } from '../services/connectionStorage';
+import { secureStorage } from '../services/secureStorage';
 import './ConnectionModal.css';
 
 const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
@@ -20,6 +21,10 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionName, setConnectionName] = useState('');
   const [showSaveForm, setShowSaveForm] = useState(false);
+  const [saveCredentials, setSaveCredentials] = useState(false);
+  const [masterPassword, setMasterPassword] = useState('');
+  const [needsMasterPassword, setNeedsMasterPassword] = useState(false);
+  const [showMasterPasswordSetup, setShowMasterPasswordSetup] = useState(false);
 
   const databaseTypes = [
     { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', port: '5432', color: '#336791' },
@@ -44,6 +49,10 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
       setIsConnected(false);
       setConnectionName('');
       setShowSaveForm(false);
+      setSaveCredentials(false);
+      setMasterPassword('');
+      setNeedsMasterPassword(false);
+      setShowMasterPasswordSetup(false);
     }
   }, [isOpen]);
 
@@ -110,10 +119,30 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
-  const handleSaveConnection = () => {
+  const handleSaveConnection = async () => {
     if (!connectionName.trim()) {
       setConnectionError('Connection name is required');
       return;
+    }
+
+    // Check if credentials should be saved and master password is needed
+    if (saveCredentials) {
+      if (!secureStorage.hasMasterPassword()) {
+        setShowMasterPasswordSetup(true);
+        return;
+      }
+      
+      if (!masterPassword) {
+        setNeedsMasterPassword(true);
+        return;
+      }
+
+      // Verify master password
+      const isValidPassword = await secureStorage.verifyMasterPassword(masterPassword);
+      if (!isValidPassword) {
+        setConnectionError('Invalid master password');
+        return;
+      }
     }
 
     const connectionId = Date.now().toString();
@@ -133,16 +162,34 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
     dispatch(setConnectionConfig(connectionConfig));
     dispatch(setConnectionType(selectedType));
     
-    // Save to localStorage
-    connectionStorage.saveConnection(newConnection);
+    // Save to localStorage with optional secure credentials
+    connectionStorage.saveConnection(newConnection, saveCredentials, masterPassword);
     
     console.log('✅ Connection saved successfully:', newConnection.name);
+    if (saveCredentials) {
+      console.log('🔒 Credentials saved securely');
+    }
     
     // Call success callback and close modal
     if (onSuccess) {
       onSuccess(newConnection);
     }
     onClose();
+  };
+
+  const handleSetupMasterPassword = async () => {
+    if (!masterPassword || masterPassword.length < 8) {
+      setConnectionError('Master password must be at least 8 characters');
+      return;
+    }
+
+    const success = await secureStorage.setMasterPassword(masterPassword);
+    if (success) {
+      setShowMasterPasswordSetup(false);
+      handleSaveConnection(); // Continue with saving
+    } else {
+      setConnectionError('Failed to set master password');
+    }
   };
 
   if (!isOpen) return null;
@@ -259,7 +306,7 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
           )}
 
           {/* Save Connection Form */}
-          {showSaveForm && (
+          {showSaveForm && !showMasterPasswordSetup && (
             <div className="section save-section">
               <h3>Save Connection</h3>
               <div className="form-field">
@@ -271,8 +318,73 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                   placeholder="Enter a name for this connection"
                 />
               </div>
+              
+              <div className="security-options">
+                <div className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    id="saveCredentials"
+                    checked={saveCredentials}
+                    onChange={(e) => setSaveCredentials(e.target.checked)}
+                  />
+                  <label htmlFor="saveCredentials">
+                    🔒 Save credentials securely (no need to enter password again)
+                  </label>
+                </div>
+                
+                {saveCredentials && (
+                  <div className="security-info">
+                    <div className="info-message">
+                      <span className="info-icon">🛡️</span>
+                      Credentials will be encrypted and stored locally in your browser
+                    </div>
+                    
+                    {needsMasterPassword && (
+                      <div className="form-field">
+                        <label>Master Password</label>
+                        <input
+                          type="password"
+                          value={masterPassword}
+                          onChange={(e) => setMasterPassword(e.target.value)}
+                          placeholder="Enter your master password"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
               <div className="connection-preview">
                 <strong>Preview:</strong> {connectionConfig.database}@{connectionConfig.host}:{connectionConfig.port} ({selectedType})
+              </div>
+            </div>
+          )}
+
+          {/* Master Password Setup */}
+          {showMasterPasswordSetup && (
+            <div className="section master-password-section">
+              <h3>🔒 Set Master Password</h3>
+              <p>Create a master password to securely store your database credentials.</p>
+              
+              <div className="form-field">
+                <label>Master Password</label>
+                <input
+                  type="password"
+                  value={masterPassword}
+                  onChange={(e) => setMasterPassword(e.target.value)}
+                  placeholder="Enter a strong master password (min 8 characters)"
+                />
+              </div>
+              
+              <div className="security-tips">
+                <h4>Security Tips:</h4>
+                <ul>
+                  <li>Use at least 8 characters</li>
+                  <li>Include uppercase and lowercase letters</li>
+                  <li>Add numbers and special characters</li>
+                  <li>Don't use common passwords</li>
+                  <li>Remember this password - it cannot be recovered</li>
+                </ul>
               </div>
             </div>
           )}
@@ -280,7 +392,24 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
 
         {/* Modal Actions */}
         <div className="modal-actions">
-          {!isConnected ? (
+          {showMasterPasswordSetup ? (
+            <>
+              <button className="cancel-btn" onClick={() => {
+                setShowMasterPasswordSetup(false);
+                setSaveCredentials(false);
+              }}>
+                Cancel
+              </button>
+              <button
+                className="setup-btn"
+                onClick={handleSetupMasterPassword}
+                disabled={!masterPassword || masterPassword.length < 8}
+              >
+                <span className="btn-icon">🔒</span>
+                Set Master Password
+              </button>
+            </>
+          ) : !isConnected ? (
             <>
               <button className="cancel-btn" onClick={onClose}>
                 Cancel
@@ -313,10 +442,10 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                 <button
                   className="save-btn"
                   onClick={handleSaveConnection}
-                  disabled={!connectionName.trim()}
+                  disabled={!connectionName.trim() || (saveCredentials && needsMasterPassword && !masterPassword)}
                 >
                   <span className="btn-icon">💾</span>
-                  Save Connection
+                  {saveCredentials ? 'Save with Credentials' : 'Save Connection'}
                 </button>
               )}
               <button className="use-btn" onClick={() => {

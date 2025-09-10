@@ -3,6 +3,8 @@
  * Manages saving and loading database connections from localStorage
  */
 
+import { secureStorage } from './secureStorage';
+
 const STORAGE_KEY = 'jupyter_database_connections';
 
 export const connectionStorage = {
@@ -48,7 +50,7 @@ export const connectionStorage = {
   /**
    * Add or update a single connection
    */
-  saveConnection: (connection) => {
+  saveConnection: (connection, saveCredentials = false, masterPassword = null) => {
     const connections = connectionStorage.loadConnections();
     const existingIndex = connections.findIndex(conn => conn.id === connection.id);
     
@@ -56,9 +58,26 @@ export const connectionStorage = {
       ...connection,
       config: {
         ...connection.config,
-        password: '' // Never save passwords
-      }
+        password: '' // Never save passwords in plain text
+      },
+      hasSecureCredentials: false
     };
+
+    // Save credentials securely if requested
+    if (saveCredentials && masterPassword && connection.config.password) {
+      try {
+        const credentialsToSave = {
+          username: connection.config.username,
+          password: connection.config.password
+        };
+        
+        secureStorage.saveCredentials(connection.id, credentialsToSave, masterPassword);
+        connectionToSave.hasSecureCredentials = true;
+        console.log('✅ Credentials saved securely for connection:', connection.name);
+      } catch (error) {
+        console.warn('⚠️ Failed to save credentials securely:', error);
+      }
+    }
     
     if (existingIndex >= 0) {
       connections[existingIndex] = connectionToSave;
@@ -68,6 +87,89 @@ export const connectionStorage = {
     
     connectionStorage.saveConnections(connections);
     return connections;
+  },
+
+  /**
+   * Load connection with secure credentials
+   */
+  loadConnectionWithCredentials: async (connectionId, masterPassword) => {
+    try {
+      const connections = connectionStorage.loadConnections();
+      const connection = connections.find(conn => conn.id === connectionId);
+      
+      if (!connection) {
+        throw new Error('Connection not found');
+      }
+
+      // Load secure credentials if available
+      if (connection.hasSecureCredentials && masterPassword) {
+        try {
+          const credentials = await secureStorage.loadCredentials(connectionId, masterPassword);
+          if (credentials) {
+            return {
+              ...connection,
+              config: {
+                ...connection.config,
+                username: credentials.username,
+                password: credentials.password
+              }
+            };
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to load secure credentials:', error);
+          throw error;
+        }
+      }
+
+      return connection;
+    } catch (error) {
+      console.error('❌ Failed to load connection with credentials:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Check if connection has saved credentials
+   */
+  hasSecureCredentials: (connectionId) => {
+    return secureStorage.hasCredentials(connectionId);
+  },
+
+  /**
+   * Remove secure credentials for a connection
+   */
+  removeSecureCredentials: (connectionId) => {
+    return secureStorage.removeCredentials(connectionId);
+  },
+
+  /**
+   * Update connection to mark credentials as saved
+   */
+  markCredentialsSaved: (connectionId) => {
+    const connections = connectionStorage.loadConnections();
+    const connectionIndex = connections.findIndex(conn => conn.id === connectionId);
+    
+    if (connectionIndex >= 0) {
+      connections[connectionIndex].hasSecureCredentials = true;
+      connectionStorage.saveConnections(connections);
+      return true;
+    }
+    return false;
+  },
+
+  /**
+   * Update connection to mark credentials as removed
+   */
+  markCredentialsRemoved: (connectionId) => {
+    const connections = connectionStorage.loadConnections();
+    const connectionIndex = connections.findIndex(conn => conn.id === connectionId);
+    
+    if (connectionIndex >= 0) {
+      connections[connectionIndex].hasSecureCredentials = false;
+      connectionStorage.saveConnections(connections);
+      return true;
+    }
+    return false;
   },
 
   /**
