@@ -1,47 +1,133 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { setAnalyticsData, setRealTimeData } from '../redux/slices/jupyterSlice';
+import { analyticsAPI, websocketManager, apiUtils } from '../services/api';
 import './AnalyticsPanel.css';
 
 const AnalyticsPanel = () => {
+  const dispatch = useDispatch();
   const { liveDemo } = useSelector((state) => state.jupyter);
-  const [realTimeData, setRealTimeData] = useState([]);
+  const [realTimeData, setLocalRealTimeData] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
 
+  // WebSocket setup
   useEffect(() => {
-    let interval;
-    if (isStreaming && liveDemo.isConnected) {
-      interval = setInterval(() => {
+    // Set up WebSocket event listeners
+    const handleConnected = () => {
+      setWsConnected(true);
+      console.log('✅ WebSocket connected to analytics');
+    };
+
+    const handleDisconnected = () => {
+      setWsConnected(false);
+      setIsStreaming(false);
+      console.log('🔌 WebSocket disconnected from analytics');
+    };
+
+    const handleRealTimeData = (data) => {
+      if (data.type === 'real_time_data') {
         const newDataPoint = {
-          timestamp: new Date(),
-          value: Math.floor(Math.random() * 100) + 50,
-          users: Math.floor(Math.random() * 50) + 20,
-          transactions: Math.floor(Math.random() * 20) + 5,
-          revenue: (Math.random() * 1000 + 200).toFixed(2)
+          timestamp: new Date(data.timestamp),
+          ...data.data
         };
-        
-        setRealTimeData(prev => [...prev.slice(-19), newDataPoint]);
-      }, 2000);
+        setLocalRealTimeData(prev => [...prev.slice(-19), newDataPoint]);
+        dispatch(setRealTimeData([...liveDemo.realTimeData.slice(-19), newDataPoint]));
+      }
+    };
+
+    const handleError = (error) => {
+      console.error('❌ WebSocket error in analytics:', error);
+      setIsStreaming(false);
+    };
+
+    // Add event listeners
+    websocketManager.on('connected', handleConnected);
+    websocketManager.on('disconnected', handleDisconnected);
+    websocketManager.on('real_time_data', handleRealTimeData);
+    websocketManager.on('error', handleError);
+
+    // Connect if not already connected
+    if (websocketManager.getConnectionState() === 'DISCONNECTED') {
+      websocketManager.connect();
     }
-    
-    return () => clearInterval(interval);
-  }, [isStreaming, liveDemo.isConnected]);
+
+    // Cleanup
+    return () => {
+      websocketManager.off('connected', handleConnected);
+      websocketManager.off('disconnected', handleDisconnected);
+      websocketManager.off('real_time_data', handleRealTimeData);
+      websocketManager.off('error', handleError);
+    };
+  }, [dispatch, liveDemo.realTimeData]);
+
+  // Load initial analytics data
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        const metrics = await analyticsAPI.getMetrics();
+        if (metrics.status === 'success') {
+          dispatch(setAnalyticsData({
+            totalRecords: metrics.metrics.total_users || 0,
+            chartData: metrics.trends || [],
+            insights: metrics.insights || []
+          }));
+        }
+      } catch (error) {
+        console.warn('Could not load analytics data:', error);
+      }
+    };
+
+    if (liveDemo.isConnected) {
+      loadAnalytics();
+    }
+  }, [liveDemo.isConnected, dispatch]);
 
   const toggleStreaming = () => {
-    setIsStreaming(!isStreaming);
-    if (!isStreaming) {
-      setRealTimeData([]);
+    if (!wsConnected) {
+      console.warn('⚠️ WebSocket not connected, cannot start streaming');
+      return;
+    }
+
+    if (isStreaming) {
+      websocketManager.stopStream();
+      setIsStreaming(false);
+      console.log('⏸️ Stopped real-time data streaming');
+    } else {
+      websocketManager.startStream();
+      setIsStreaming(true);
+      setLocalRealTimeData([]); // Clear previous data
+      console.log('▶️ Started real-time data streaming');
     }
   };
 
-  const exportToJupyter = () => {
-    const notebookCode = generateJupyterNotebook();
-    const blob = new Blob([notebookCode], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'analytics_notebook.ipynb';
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportToJupyter = async () => {
+    try {
+      const exportData = {
+        title: "Real-time Analytics Dashboard",
+        description: "Generated from Jupyter Frontend Live Demo",
+        queries: [
+          "SELECT COUNT(*) as total_users FROM users;",
+          "SELECT DATE_TRUNC('day', order_date) as day, COUNT(*) as orders, SUM(total_amount) as revenue FROM orders GROUP BY day ORDER BY day DESC LIMIT 7;",
+          "SELECT p.name, p.category, COUNT(o.id) as order_count FROM products p LEFT JOIN orders o ON p.id = o.user_id GROUP BY p.id, p.name, p.category;"
+        ]
+      };
+
+      const result = await analyticsAPI.exportNotebook(exportData);
+      
+      if (result.status === 'success') {
+        const filename = result.filename || 'analytics_notebook.ipynb';
+        apiUtils.downloadFile(result.notebook, filename, 'application/json');
+        console.log('📁 Successfully exported Jupyter notebook');
+      } else {
+        throw new Error('Export failed');
+      }
+    } catch (error) {
+      console.error('❌ Failed to export notebook:', error);
+      // Fallback to local generation
+      const notebookCode = generateJupyterNotebook();
+      apiUtils.downloadFile(notebookCode, 'analytics_notebook.ipynb', 'application/json');
+    }
   };
 
   const generateJupyterNotebook = () => {
@@ -157,7 +243,7 @@ const AnalyticsPanel = () => {
           <button
             className={`streaming-btn ${isStreaming ? 'active' : ''}`}
             onClick={toggleStreaming}
-            disabled={!liveDemo.isConnected}
+            disabled={!liveDemo.isConnected || !wsConnected}
           >
             <span className="btn-icon">{isStreaming ? '⏸️' : '▶️'}</span>
             {isStreaming ? 'Stop Stream' : 'Start Stream'}
@@ -194,8 +280,10 @@ const AnalyticsPanel = () => {
           <div className="section-header">
             <h4>Real-time Data Stream</h4>
             <div className="stream-status">
-              <span className={`status-dot ${isStreaming ? 'active' : ''}`}></span>
-              <span>{isStreaming ? 'Streaming' : 'Stopped'}</span>
+              <span className={`status-dot ${isStreaming && wsConnected ? 'active' : ''}`}></span>
+              <span>
+                {!wsConnected ? 'Disconnected' : isStreaming ? 'Streaming' : 'Stopped'}
+              </span>
             </div>
           </div>
           
@@ -203,7 +291,12 @@ const AnalyticsPanel = () => {
             {realTimeData.length === 0 ? (
               <div className="no-stream-data">
                 <span className="stream-icon">📡</span>
-                <p>Click "Start Stream" to begin receiving real-time data</p>
+                <p>
+                  {!wsConnected 
+                    ? "WebSocket disconnected - reconnecting..." 
+                    : "Click \"Start Stream\" to begin receiving real-time data"
+                  }
+                </p>
               </div>
             ) : (
               <div className="data-stream">

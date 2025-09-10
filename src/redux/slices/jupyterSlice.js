@@ -98,7 +98,16 @@ const initialState = {
       totalRecords: 0,
       chartData: [],
       insights: []
-    }
+    },
+    connectionConfig: {
+      host: 'localhost',
+      port: '5432',
+      database: 'jupyter_db',
+      username: 'postgres',
+      password: ''
+    },
+    realTimeData: [],
+    queryHistory: []
   }
 };
 
@@ -140,6 +149,12 @@ const jupyterSlice = createSlice({
     },
     setAnalyticsData: (state, action) => {
       state.liveDemo.analyticsData = action.payload;
+    },
+    setConnectionConfig: (state, action) => {
+      state.liveDemo.connectionConfig = action.payload;
+    },
+    setRealTimeData: (state, action) => {
+      state.liveDemo.realTimeData = action.payload;
     }
   }
 });
@@ -154,6 +169,8 @@ export const {
   setQueryResults, 
   setLoading, 
   setError, 
-  setAnalyticsData 
+  setAnalyticsData,
+  setConnectionConfig,
+  setRealTimeData
 } = jupyterSlice.actions;
 export default jupyterSlice.reducer;

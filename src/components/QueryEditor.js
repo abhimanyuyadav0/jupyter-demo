@@ -1,14 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setCurrentQuery, setQueryResults, setLoading, setError } from '../redux/slices/jupyterSlice';
+import { queryAPI, apiUtils } from '../services/api';
 import './QueryEditor.css';
 
 const QueryEditor = () => {
   const dispatch = useDispatch();
   const { liveDemo } = useSelector((state) => state.jupyter);
   const [queryHistory, setQueryHistory] = useState([]);
+  const [sampleQueries, setSampleQueries] = useState([]);
 
-  const sampleQueries = [
+  // Load sample queries from backend
+  useEffect(() => {
+    const loadSamples = async () => {
+      try {
+        const samples = await queryAPI.getSamples();
+        if (samples.status === 'success') {
+          setSampleQueries(samples.samples);
+        }
+      } catch (error) {
+        console.warn('Could not load sample queries:', error);
+        // Fallback to default samples
+        setSampleQueries(defaultSampleQueries);
+      }
+    };
+
+    const loadHistory = async () => {
+      try {
+        const history = await queryAPI.getHistory(10);
+        if (history.status === 'success') {
+          setQueryHistory(history.history);
+        }
+      } catch (error) {
+        console.warn('Could not load query history:', error);
+      }
+    };
+
+    loadSamples();
+    if (liveDemo.isConnected) {
+      loadHistory();
+    }
+  }, [liveDemo.isConnected]);
+
+  const defaultSampleQueries = [
     {
       name: "User Analytics",
       query: `SELECT 
@@ -65,25 +99,44 @@ ORDER BY revenue DESC;`
       return;
     }
 
+    if (!liveDemo.isConnected) {
+      dispatch(setError('Please connect to database first'));
+      return;
+    }
+
     dispatch(setLoading(true));
     dispatch(setError(null));
 
     try {
-      // Simulate query execution
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockResults = generateMockQueryResults(liveDemo.currentQuery);
-      dispatch(setQueryResults(mockResults));
-      
-      // Add to history
-      setQueryHistory(prev => [{
+      const queryData = {
         query: liveDemo.currentQuery,
-        timestamp: new Date(),
-        rowCount: mockResults.length
-      }, ...prev.slice(0, 9)]); // Keep last 10 queries
+        limit: 1000
+      };
+
+      const result = await queryAPI.execute(queryData);
+      
+      if (result.success) {
+        dispatch(setQueryResults(result.data || []));
+        
+        // Refresh query history
+        try {
+          const history = await queryAPI.getHistory(10);
+          if (history.status === 'success') {
+            setQueryHistory(history.history);
+          }
+        } catch (historyError) {
+          console.warn('Could not refresh history:', historyError);
+        }
+        
+        console.log(`✅ Query executed successfully: ${result.row_count} rows returned`);
+      } else {
+        throw new Error(result.error || 'Query execution failed');
+      }
       
     } catch (error) {
-      dispatch(setError('Query execution failed: ' + error.message));
+      const errorMessage = apiUtils.formatError(error);
+      dispatch(setError(errorMessage));
+      console.error('❌ Query execution failed:', error);
     } finally {
       dispatch(setLoading(false));
     }

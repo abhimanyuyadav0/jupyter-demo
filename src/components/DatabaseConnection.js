@@ -1,18 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setConnectionStatus, setConnectionType, setError } from '../redux/slices/jupyterSlice';
+import { setConnectionStatus, setConnectionType, setError, setConnectionConfig } from '../redux/slices/jupyterSlice';
+import { databaseAPI, apiUtils } from '../services/api';
 import './DatabaseConnection.css';
 
 const DatabaseConnection = () => {
   const dispatch = useDispatch();
   const { liveDemo } = useSelector((state) => state.jupyter);
-  const [connectionConfig, setConnectionConfig] = useState({
-    host: 'localhost',
-    port: '5432',
-    database: 'analytics_db',
-    username: 'jupyter_user',
-    password: ''
-  });
+  const [connectionConfig, setLocalConnectionConfig] = useState(
+    liveDemo.connectionConfig || {
+      host: 'localhost',
+      port: '5432',
+      database: 'jupyter_db',
+      username: 'postgres',
+      password: ''
+    }
+  );
+  const [backendHealth, setBackendHealth] = useState(false);
 
   const databaseTypes = [
     { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', port: '5432' },
@@ -25,52 +29,98 @@ const DatabaseConnection = () => {
     dispatch(setConnectionType(type));
     const dbType = databaseTypes.find(db => db.id === type);
     if (dbType && dbType.port !== 'N/A') {
-      setConnectionConfig(prev => ({ ...prev, port: dbType.port }));
+      setLocalConnectionConfig(prev => ({ ...prev, port: dbType.port }));
     }
   };
 
   const handleConfigChange = (field, value) => {
-    setConnectionConfig(prev => ({ ...prev, [field]: value }));
+    setLocalConnectionConfig(prev => ({ ...prev, [field]: value }));
   };
 
+  // Check backend health on component mount
+  useEffect(() => {
+    const checkHealth = async () => {
+      const isHealthy = await apiUtils.checkBackendHealth();
+      setBackendHealth(isHealthy);
+      
+      if (isHealthy) {
+        // Check current connection status
+        try {
+          const status = await databaseAPI.getStatus();
+          dispatch(setConnectionStatus(status.connected ? 'connected' : 'disconnected'));
+        } catch (error) {
+          console.warn('Could not get database status:', error);
+        }
+      }
+    };
+    
+    checkHealth();
+  }, [dispatch]);
+
   const handleConnect = async () => {
+    if (!backendHealth) {
+      dispatch(setError('Backend server is not running. Please start the FastAPI server on port 8000.'));
+      return;
+    }
+
     dispatch(setConnectionStatus('connecting'));
     dispatch(setError(null));
 
-    // Simulate connection process
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Use real API to connect to database
+      const connectionData = {
+        host: connectionConfig.host,
+        port: parseInt(connectionConfig.port),
+        database: connectionConfig.database,
+        username: connectionConfig.username,
+        password: connectionConfig.password,
+        db_type: liveDemo.connectionType
+      };
+
+      const result = await databaseAPI.connect(connectionData);
       
-      // Simulate connection success
-      if (Math.random() > 0.1) { // 90% success rate
+      if (result.status === 'success') {
         dispatch(setConnectionStatus('connected'));
+        dispatch(setConnectionConfig(connectionConfig));
         
-        // Generate some initial sample data
-        const sampleData = {
-          totalRecords: 1247,
-          chartData: generateSampleChartData(),
-          insights: [
-            { title: 'Connection Established', value: 'Success', trend: '+100%' },
-            { title: 'Database Size', value: '2.3 GB', trend: 'Stable' },
-            { title: 'Tables Found', value: '12', trend: 'Active' },
-            { title: 'Last Updated', value: 'Just now', trend: 'Live' }
-          ]
-        };
+        // Get initial analytics data
+        try {
+          const { analyticsAPI } = await import('../services/api');
+          const metrics = await analyticsAPI.getMetrics();
+          
+          if (metrics.status === 'success') {
+            const { setAnalyticsData } = await import('../redux/slices/jupyterSlice');
+            dispatch(setAnalyticsData({
+              totalRecords: metrics.metrics.total_users || 0,
+              chartData: metrics.trends || [],
+              insights: metrics.insights || []
+            }));
+          }
+        } catch (analyticsError) {
+          console.warn('Could not load initial analytics:', analyticsError);
+        }
         
-        // Import and dispatch analytics data
-        const { setAnalyticsData } = await import('../redux/slices/jupyterSlice');
-        dispatch(setAnalyticsData(sampleData));
+        console.log('✅ Successfully connected to database:', result.connection_info);
       } else {
-        throw new Error('Connection timeout - please check your credentials');
+        throw new Error(result.message || 'Connection failed');
       }
     } catch (error) {
       dispatch(setConnectionStatus('disconnected'));
-      dispatch(setError(error.message));
+      const errorMessage = apiUtils.formatError(error);
+      dispatch(setError(errorMessage));
+      console.error('❌ Database connection failed:', error);
     }
   };
 
-  const handleDisconnect = () => {
-    dispatch(setConnectionStatus('disconnected'));
+  const handleDisconnect = async () => {
+    try {
+      await databaseAPI.disconnect();
+      dispatch(setConnectionStatus('disconnected'));
+      console.log('✅ Successfully disconnected from database');
+    } catch (error) {
+      console.warn('⚠️ Error disconnecting:', error);
+      dispatch(setConnectionStatus('disconnected')); // Force disconnect in UI
+    }
   };
 
   const generateSampleChartData = () => {
@@ -216,14 +266,20 @@ const DatabaseConnection = () => {
               {liveDemo.connectionStatus}
             </span>
           </div>
-          <div className="info-card">
-            <span className="info-label">Host:</span>
-            <span className="info-value">{connectionConfig.host}:{connectionConfig.port}</span>
-          </div>
-          <div className="info-card">
-            <span className="info-label">Database:</span>
-            <span className="info-value">{connectionConfig.database}</span>
-          </div>
+            <div className="info-card">
+              <span className="info-label">Host:</span>
+              <span className="info-value">{connectionConfig.host}:{connectionConfig.port}</span>
+            </div>
+            <div className="info-card">
+              <span className="info-label">Database:</span>
+              <span className="info-value">{connectionConfig.database}</span>
+            </div>
+            {!backendHealth && (
+              <div className="info-card">
+                <span className="info-label">Backend:</span>
+                <span className="info-value status-disconnected">Server not running</span>
+              </div>
+            )}
         </div>
 
         <div className="sample-queries">
