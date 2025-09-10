@@ -1,0 +1,361 @@
+.use-case-detail {
+  min-height: calc(100vh - 80px);
+  padding: 2rem 0;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+  font-size: 0.875rem;
+}
+
+.breadcrumb-link {
+  color: #667eea;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-link:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+.breadcrumb-separator {
+  margin: 0 0.5rem;
+  color: #9ca3af;
+}
+
+.breadcrumb-current {
+  color: #6b7280;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 1rem;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.1"/><circle cx="20" cy="80" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+}
+
+.detail-icon {
+  font-size: 4rem;
+  margin-right: 2rem;
+  animation: bounce 2s infinite;
+  position: relative;
+  z-index: 1;
+}
+
+.detail-info {
+  position: relative;
+  z-index: 1;
+}
+
+.detail-title {
+  font-size: 3rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.detail-description {
+  font-size: 1.25rem;
+  opacity: 0.9;
+  line-height: 1.6;
+}
+
+.detail-content {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  margin-bottom: 4rem;
+}
+
+.examples-section,
+.tools-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.examples-section h2,
+.tools-section h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #1a202c;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+.examples-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.example-card {
+  background: #f8fafc;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border-left: 4px solid #667eea;
+  transition: all 0.2s ease;
+}
+
+.example-card:hover {
+  background: #f1f5f9;
+  transform: translateX(5px);
+}
+
+.example-card h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #374151;
+}
+
+.example-card p {
+  color: #64748b;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.tool-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  text-align: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.tool-card:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 10px 20px -5px rgba(102, 126, 234, 0.3);
+}
+
+.tool-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.code-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  margin-bottom: 4rem;
+}
+
+.code-section h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #1a202c;
+}
+
+.code-section p {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.benefits-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.benefits-section h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  color: #1a202c;
+  text-align: center;
+}
+
+.benefits-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.benefit {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.benefit:hover {
+  background: #f1f5f9;
+  transform: translateY(-2px);
+}
+
+.benefit-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.benefit-content h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #374151;
+}
+
+.benefit-content p {
+  color: #64748b;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.not-found {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.not-found h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.back-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.back-link:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .detail-title {
+    font-size: 2.5rem;
+  }
+  
+  .detail-description {
+    font-size: 1.125rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .use-case-detail {
+    padding: 1rem 0;
+  }
+  
+  .detail-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  .detail-icon {
+    margin-right: 0;
+    margin-bottom: 1rem;
+    font-size: 3rem;
+  }
+  
+  .detail-title {
+    font-size: 2rem;
+  }
+  
+  .detail-description {
+    font-size: 1rem;
+  }
+  
+  .detail-content {
+    margin: 0;
+  }
+  
+  .detail-grid {
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  .examples-section,
+  .tools-section,
+  .code-section,
+  .benefits-section {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .tools-grid {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+  
+  .benefits-list {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .benefit {
+    padding: 1rem;
+  }
+}
+
+/* Animation for content sections */
+.examples-section,
+.tools-section,
+.code-section,
+.benefits-section {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.example-card:nth-child(1) { animation: fadeInUp 0.6s ease-out 0.1s both; }
+.example-card:nth-child(2) { animation: fadeInUp 0.6s ease-out 0.2s both; }
+.example-card:nth-child(3) { animation: fadeInUp 0.6s ease-out 0.3s both; }
+.example-card:nth-child(4) { animation: fadeInUp 0.6s ease-out 0.4s both; }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
