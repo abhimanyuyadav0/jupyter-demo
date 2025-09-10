@@ -2,12 +2,14 @@
 Database connection and management API routes
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 import logging
+from sqlalchemy.orm import Session
 
-from app.core.database import get_db_manager, DatabaseManager
+from app.core.database import get_db_manager, DatabaseManager, get_db
+from app.services.credential_service import get_credential_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +23,95 @@ class DatabaseConnectionRequest(BaseModel):
     username: str = Field(..., description="Database username")
     password: str = Field(..., description="Database password")
     db_type: str = Field(default="postgresql", description="Database type")
+    save_credentials: bool = Field(default=False, description="Save credentials securely")
+    connection_name: str = Field(default="", description="Name for saved connection")
 
 class DatabaseConnectionResponse(BaseModel):
     """Database connection response model"""
     status: str
     message: str
     connection_info: Optional[Dict[str, Any]] = None
+    credential_saved: bool = False
+    credential_duplicate: bool = False
+    credential_info: Optional[Dict[str, Any]] = None
 
 @router.post("/connect", response_model=DatabaseConnectionResponse)
 async def connect_database(
     connection_request: DatabaseConnectionRequest,
-    db_manager: DatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db_manager: DatabaseManager = Depends(get_db_manager),
+    db: Session = Depends(get_db)
 ):
     """
-    Test and establish database connection
+    Test and establish database connection with optional credential saving
     """
     try:
         # In a real implementation, you would use the provided credentials
         # For now, we'll use the configured database connection
         connection_info = await db_manager.connect()
         
+        # Initialize credential saving results
+        credential_saved = False
+        credential_duplicate = False
+        credential_info = None
+        
+        # Save credentials if requested
+        if connection_request.save_credentials:
+            try:
+                credential_service = get_credential_service(db)
+                
+                # Generate connection name if not provided
+                connection_name = connection_request.connection_name
+                if not connection_name:
+                    connection_name = f"{connection_request.database}@{connection_request.host}:{connection_request.port}"
+                
+                # Get user session for tracking
+                user_session = request.headers.get("X-User-Session")
+                if not user_session:
+                    user_agent = request.headers.get("User-Agent", "")
+                    client_host = getattr(request.client, 'host', 'unknown')
+                    user_session = f"{client_host}:{hash(user_agent) % 10000}"
+                
+                # Save credential
+                save_result = credential_service.save_credential(
+                    name=connection_name,
+                    host=connection_request.host,
+                    port=connection_request.port,
+                    database=connection_request.database,
+                    username=connection_request.username,
+                    password=connection_request.password,
+                    db_type=connection_request.db_type,
+                    user_session=user_session
+                )
+                
+                if save_result["status"] == "success":
+                    credential_saved = True
+                    credential_info = save_result["credential"]
+                    logger.info(f"✅ Credentials saved for connection: {connection_name}")
+                elif save_result["status"] == "exists":
+                    credential_duplicate = True
+                    credential_info = save_result["credential"]
+                    logger.info(f"🔄 Duplicate credentials found for: {connection_name}")
+                else:
+                    logger.warning(f"⚠️ Failed to save credentials: {save_result['message']}")
+                    
+            except Exception as cred_error:
+                # Don't fail the connection if credential saving fails
+                logger.error(f"❌ Credential saving failed: {cred_error}")
+        
+        response_message = "Successfully connected to database"
+        if credential_saved:
+            response_message += " and saved credentials securely"
+        elif credential_duplicate:
+            response_message += " (credentials already exist)"
+        
         return DatabaseConnectionResponse(
             status="success",
-            message="Successfully connected to database",
-            connection_info=connection_info
+            message=response_message,
+            connection_info=connection_info,
+            credential_saved=credential_saved,
+            credential_duplicate=credential_duplicate,
+            credential_info=credential_info
         )
         
     except Exception as e:

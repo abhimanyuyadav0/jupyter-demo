@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../redux/slices/jupyterSlice';
 import { databaseAPI, apiUtils } from '../services/api';
-import { connectionStorage } from '../services/connectionStorage';
-import { secureStorage } from '../services/secureStorage';
 import './ConnectionModal.css';
 
 const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
@@ -20,11 +18,7 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
   const [connectionError, setConnectionError] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionName, setConnectionName] = useState('');
-  const [showSaveForm, setShowSaveForm] = useState(false);
   const [saveCredentials, setSaveCredentials] = useState(false);
-  const [masterPassword, setMasterPassword] = useState('');
-  const [needsMasterPassword, setNeedsMasterPassword] = useState(false);
-  const [showMasterPasswordSetup, setShowMasterPasswordSetup] = useState(false);
 
   const databaseTypes = [
     { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', port: '5432', color: '#336791' },
@@ -48,11 +42,7 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
       setConnectionError(null);
       setIsConnected(false);
       setConnectionName('');
-      setShowSaveForm(false);
       setSaveCredentials(false);
-      setMasterPassword('');
-      setNeedsMasterPassword(false);
-      setShowMasterPasswordSetup(false);
     }
   }, [isOpen]);
 
@@ -73,13 +63,18 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
     setConnectionError(null);
 
     try {
+      // Generate connection name for backend
+      const finalConnectionName = connectionName.trim() || `${connectionConfig.database}@${connectionConfig.host}:${connectionConfig.port}`;
+      
       const connectionData = {
         host: connectionConfig.host,
         port: parseInt(connectionConfig.port),
         database: connectionConfig.database,
         username: connectionConfig.username,
         password: connectionConfig.password,
-        db_type: selectedType
+        db_type: selectedType,
+        save_credentials: saveCredentials,
+        connection_name: finalConnectionName
       };
 
       const result = await databaseAPI.connect(connectionData);
@@ -87,14 +82,41 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
       if (result.status === 'success') {
         setIsConnected(true);
         
-        // Generate default connection name
-        const defaultName = connectionStorage.generateConnectionName(connectionConfig, selectedType);
-        setConnectionName(defaultName);
+        // Create connection object for frontend
+        const connectionId = result.credential_info?.id || Date.now().toString();
+        const newConnection = {
+          id: connectionId,
+          name: finalConnectionName,
+          config: {
+            ...connectionConfig,
+            password: '' // Don't store password in Redux
+          },
+          type: selectedType,
+          status: 'connected',
+          lastConnected: new Date().toISOString(),
+          hasSecureCredentials: result.credential_saved || result.credential_duplicate
+        };
+
+        // Add to Redux store
+        dispatch(addConnection(newConnection));
+        dispatch(setActiveConnection(connectionId));
+        dispatch(setConnectionStatus('connected'));
+        dispatch(setConnectionConfig(connectionConfig));
+        dispatch(setConnectionType(selectedType));
         
         console.log('✅ Successfully connected to database:', result.connection_info);
         
-        // Show save form
-        setShowSaveForm(true);
+        if (result.credential_saved) {
+          console.log('🔒 Credentials saved securely to backend');
+        } else if (result.credential_duplicate) {
+          console.log('🔄 Credentials already exist in backend');
+        }
+        
+        // Call success callback and close modal immediately
+        if (onSuccess) {
+          onSuccess(newConnection);
+        }
+        onClose();
       } else {
         throw new Error(result.message || 'Connection failed');
       }
@@ -107,90 +129,6 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
     setIsConnecting(false);
   };
 
-  const handleDisconnect = async () => {
-    try {
-      await databaseAPI.disconnect();
-      setIsConnected(false);
-      setShowSaveForm(false);
-      console.log('✅ Successfully disconnected from database');
-    } catch (error) {
-      console.warn('⚠️ Error disconnecting:', error);
-      setIsConnected(false); // Force disconnect in UI
-    }
-  };
-
-  const handleSaveConnection = async () => {
-    if (!connectionName.trim()) {
-      setConnectionError('Connection name is required');
-      return;
-    }
-
-    // Check if credentials should be saved and master password is needed
-    if (saveCredentials) {
-      if (!secureStorage.hasMasterPassword()) {
-        setShowMasterPasswordSetup(true);
-        return;
-      }
-      
-      if (!masterPassword) {
-        setNeedsMasterPassword(true);
-        return;
-      }
-
-      // Verify master password
-      const isValidPassword = await secureStorage.verifyMasterPassword(masterPassword);
-      if (!isValidPassword) {
-        setConnectionError('Invalid master password');
-        return;
-      }
-    }
-
-    const connectionId = Date.now().toString();
-    const newConnection = {
-      id: connectionId,
-      name: connectionName.trim(),
-      config: connectionConfig,
-      type: selectedType,
-      status: 'connected',
-      lastConnected: new Date().toISOString()
-    };
-
-    // Add to Redux store
-    dispatch(addConnection(newConnection));
-    dispatch(setActiveConnection(connectionId));
-    dispatch(setConnectionStatus('connected'));
-    dispatch(setConnectionConfig(connectionConfig));
-    dispatch(setConnectionType(selectedType));
-    
-    // Save to localStorage with optional secure credentials
-    connectionStorage.saveConnection(newConnection, saveCredentials, masterPassword);
-    
-    console.log('✅ Connection saved successfully:', newConnection.name);
-    if (saveCredentials) {
-      console.log('🔒 Credentials saved securely');
-    }
-    
-    // Call success callback and close modal
-    if (onSuccess) {
-      onSuccess(newConnection);
-    }
-    onClose();
-  };
-
-  const handleSetupMasterPassword = async () => {
-    if (!masterPassword || masterPassword.length < 8) {
-      setConnectionError('Master password must be at least 8 characters');
-      return;
-    }
-
-    const success = await secureStorage.setMasterPassword(masterPassword);
-    if (success) {
-      setShowMasterPasswordSetup(false);
-      handleSaveConnection(); // Continue with saving
-    } else {
-      setConnectionError('Failed to set master password');
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -263,6 +201,17 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                 />
               </div>
 
+              <div className="form-field">
+                <label>Connection Name (Optional)</label>
+                <input
+                  type="text"
+                  value={connectionName}
+                  onChange={(e) => setConnectionName(e.target.value)}
+                  placeholder="My Database Connection"
+                  disabled={isConnecting || isConnected}
+                />
+              </div>
+
               {selectedType !== 'sqlite' && (
                 <div className="form-row">
                   <div className="form-field">
@@ -287,6 +236,30 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                   </div>
                 </div>
               )}
+
+              <div className="security-options">
+                <div className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    id="saveCredentials"
+                    checked={saveCredentials}
+                    onChange={(e) => setSaveCredentials(e.target.checked)}
+                    disabled={isConnecting || isConnected}
+                  />
+                  <label htmlFor="saveCredentials">
+                    🔒 Save credentials securely on server (no need to enter password again)
+                  </label>
+                </div>
+                
+                {saveCredentials && (
+                  <div className="security-info">
+                    <div className="info-message">
+                      <span className="info-icon">🛡️</span>
+                      Credentials will be encrypted and stored securely on the backend server
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -298,171 +271,38 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           )}
 
-          {isConnected && !showSaveForm && (
+          {isConnected && (
             <div className="success-message">
               <span className="success-icon">✅</span>
               Successfully connected to database!
             </div>
           )}
 
-          {/* Save Connection Form */}
-          {showSaveForm && !showMasterPasswordSetup && (
-            <div className="section save-section">
-              <h3>Save Connection</h3>
-              <div className="form-field">
-                <label>Connection Name</label>
-                <input
-                  type="text"
-                  value={connectionName}
-                  onChange={(e) => setConnectionName(e.target.value)}
-                  placeholder="Enter a name for this connection"
-                />
-              </div>
-              
-              <div className="security-options">
-                <div className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    id="saveCredentials"
-                    checked={saveCredentials}
-                    onChange={(e) => setSaveCredentials(e.target.checked)}
-                  />
-                  <label htmlFor="saveCredentials">
-                    🔒 Save credentials securely (no need to enter password again)
-                  </label>
-                </div>
-                
-                {saveCredentials && (
-                  <div className="security-info">
-                    <div className="info-message">
-                      <span className="info-icon">🛡️</span>
-                      Credentials will be encrypted and stored locally in your browser
-                    </div>
-                    
-                    {needsMasterPassword && (
-                      <div className="form-field">
-                        <label>Master Password</label>
-                        <input
-                          type="password"
-                          value={masterPassword}
-                          onChange={(e) => setMasterPassword(e.target.value)}
-                          placeholder="Enter your master password"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <div className="connection-preview">
-                <strong>Preview:</strong> {connectionConfig.database}@{connectionConfig.host}:{connectionConfig.port} ({selectedType})
-              </div>
-            </div>
-          )}
 
-          {/* Master Password Setup */}
-          {showMasterPasswordSetup && (
-            <div className="section master-password-section">
-              <h3>🔒 Set Master Password</h3>
-              <p>Create a master password to securely store your database credentials.</p>
-              
-              <div className="form-field">
-                <label>Master Password</label>
-                <input
-                  type="password"
-                  value={masterPassword}
-                  onChange={(e) => setMasterPassword(e.target.value)}
-                  placeholder="Enter a strong master password (min 8 characters)"
-                />
-              </div>
-              
-              <div className="security-tips">
-                <h4>Security Tips:</h4>
-                <ul>
-                  <li>Use at least 8 characters</li>
-                  <li>Include uppercase and lowercase letters</li>
-                  <li>Add numbers and special characters</li>
-                  <li>Don't use common passwords</li>
-                  <li>Remember this password - it cannot be recovered</li>
-                </ul>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Modal Actions */}
         <div className="modal-actions">
-          {showMasterPasswordSetup ? (
-            <>
-              <button className="cancel-btn" onClick={() => {
-                setShowMasterPasswordSetup(false);
-                setSaveCredentials(false);
-              }}>
-                Cancel
-              </button>
-              <button
-                className="setup-btn"
-                onClick={handleSetupMasterPassword}
-                disabled={!masterPassword || masterPassword.length < 8}
-              >
-                <span className="btn-icon">🔒</span>
-                Set Master Password
-              </button>
-            </>
-          ) : !isConnected ? (
-            <>
-              <button className="cancel-btn" onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                className="connect-btn"
-                onClick={handleConnect}
-                disabled={isConnecting || !connectionConfig.host || !connectionConfig.database}
-              >
-                {isConnecting ? (
-                  <>
-                    <span className="spinner"></span>
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <span className="btn-icon">🔗</span>
-                    Connect
-                  </>
-                )}
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="disconnect-btn" onClick={handleDisconnect}>
-                <span className="btn-icon">🔌</span>
-                Disconnect
-              </button>
-              {showSaveForm && (
-                <button
-                  className="save-btn"
-                  onClick={handleSaveConnection}
-                  disabled={!connectionName.trim() || (saveCredentials && needsMasterPassword && !masterPassword)}
-                >
-                  <span className="btn-icon">💾</span>
-                  {saveCredentials ? 'Save with Credentials' : 'Save Connection'}
-                </button>
-              )}
-              <button className="use-btn" onClick={() => {
-                // Use connection without saving
-                dispatch(setConnectionStatus('connected'));
-                dispatch(setConnectionConfig(connectionConfig));
-                dispatch(setConnectionType(selectedType));
-                if (onSuccess) {
-                  onSuccess({ temp: true, config: connectionConfig, type: selectedType });
-                }
-                onClose();
-              }}>
-                <span className="btn-icon">✓</span>
-                Use Without Saving
-              </button>
-            </>
-          )}
+          <button className="cancel-btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="connect-btn"
+            onClick={handleConnect}
+            disabled={isConnecting || !connectionConfig.host || !connectionConfig.database}
+          >
+            {isConnecting ? (
+              <>
+                <span className="spinner"></span>
+                Connecting...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">🔗</span>
+                Connect & Close
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

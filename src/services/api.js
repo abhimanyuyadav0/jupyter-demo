@@ -52,9 +52,16 @@ apiClient.interceptors.response.use(
 
 // Database API
 export const databaseAPI = {
-  // Test connection
+  // Test connection with optional credential saving
   connect: async (connectionData) => {
-    const response = await apiClient.post('/api/database/connect', connectionData);
+    // Include credential saving in connection request
+    const requestData = {
+      ...connectionData,
+      save_credentials: connectionData.save_credentials || false,
+      connection_name: connectionData.connection_name || ''
+    };
+    
+    const response = await apiClient.post('/api/database/connect', requestData);
     return response.data;
   },
 
@@ -79,6 +86,63 @@ export const databaseAPI = {
   // Get table statistics
   getTableStats: async (tableName) => {
     const response = await apiClient.get(`/api/database/tables/${tableName}/stats`);
+    return response.data;
+  }
+};
+
+// Credentials API
+export const credentialsAPI = {
+  // Save credentials
+  save: async (credentialData) => {
+    const response = await apiClient.post('/api/credentials/save', credentialData);
+    return response.data;
+  },
+
+  // List saved credentials
+  list: async () => {
+    const response = await apiClient.get('/api/credentials/list');
+    return response.data;
+  },
+
+  // Get connections for frontend
+  getConnections: async () => {
+    const response = await apiClient.get('/api/credentials/connections');
+    return response.data;
+  },
+
+  // Get credential password
+  getPassword: async (credentialId) => {
+    const response = await apiClient.get(`/api/credentials/${credentialId}/password`);
+    return response.data;
+  },
+
+  // Get connection with password
+  getConnectionWithPassword: async (credentialId) => {
+    const response = await apiClient.get(`/api/credentials/${credentialId}/connection`);
+    return response.data;
+  },
+
+  // Delete credential
+  delete: async (credentialId) => {
+    const response = await apiClient.delete(`/api/credentials/${credentialId}`);
+    return response.data;
+  },
+
+  // Check for duplicates
+  checkDuplicate: async (connectionData) => {
+    const response = await apiClient.post('/api/credentials/check-duplicate', connectionData);
+    return response.data;
+  },
+
+  // Get audit logs
+  getAudit: async (credentialId, limit = 50) => {
+    const response = await apiClient.get(`/api/credentials/${credentialId}/audit?limit=${limit}`);
+    return response.data;
+  },
+
+  // Get all audit logs
+  getAllAudit: async (limit = 100) => {
+    const response = await apiClient.get(`/api/credentials/audit/all?limit=${limit}`);
     return response.data;
   }
 };

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 
-  addConnection, 
   removeConnection, 
   setActiveConnection, 
   updateConnectionStatus,
@@ -17,68 +16,31 @@ import { databaseAPI, apiUtils } from '../services/api';
 import { secureStorage } from '../services/secureStorage';
 import ConnectionModal from './ConnectionModal';
 import './ConnectionManager.css';
+import { useNavigate } from 'react-router-dom';
 
 const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { liveDemo } = useSelector((state) => state.jupyter);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [newConnectionName, setNewConnectionName] = useState('');
   const [editingConnection, setEditingConnection] = useState(null);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [connectingTo, setConnectingTo] = useState(null);
 
-  // Load saved connections on component mount
+  // Auto-save connections when they change (avoid redundant writes)
+  const lastSavedRef = useRef('');
   useEffect(() => {
-    const savedConnections = connectionStorage.loadConnections();
-    dispatch(loadSavedConnections(savedConnections));
-  }, [dispatch]);
-
-  // Auto-save connections when they change
-  useEffect(() => {
-    if (liveDemo.connections.length > 0) {
-      connectionStorage.saveConnections(liveDemo.connections);
+    const serialized = JSON.stringify(liveDemo.connections);
+    if (serialized !== lastSavedRef.current) {
+      if (liveDemo.connections.length > 0) {
+        connectionStorage.saveConnections(liveDemo.connections);
+      }
+      lastSavedRef.current = serialized;
     }
   }, [liveDemo.connections]);
 
-  const handleSaveCurrentConnection = () => {
-    if (!liveDemo.isConnected || !liveDemo.connectionConfig) {
-      dispatch(setError('No active connection to save'));
-      return;
-    }
 
-    const defaultName = connectionStorage.generateConnectionName(
-      liveDemo.connectionConfig, 
-      liveDemo.connectionType
-    );
-    setNewConnectionName(defaultName);
-    setShowSaveDialog(true);
-  };
-
-  const confirmSaveConnection = () => {
-    if (!newConnectionName.trim()) {
-      dispatch(setError('Connection name is required'));
-      return;
-    }
-
-    const connectionId = Date.now().toString();
-    const newConnection = {
-      id: connectionId,
-      name: newConnectionName.trim(),
-      config: liveDemo.connectionConfig,
-      type: liveDemo.connectionType,
-      status: 'connected',
-      lastConnected: new Date().toISOString()
-    };
-
-    dispatch(addConnection(newConnection));
-    dispatch(setActiveConnection(connectionId));
-    setShowSaveDialog(false);
-    setNewConnectionName('');
-    
-    console.log('✅ Connection saved successfully:', newConnection.name);
-  };
 
   const handleSelectConnection = (connection) => {
     // Just select the connection, don't connect automatically
@@ -271,6 +233,17 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
     return `${diffDays}d ago`;
   };
 
+  const handleDoubleClick = (connection) => {
+    // Prime redux with the selected connection so explorer has context
+    dispatch(setActiveConnection(connection.id));
+    // Optionally reflect current status immediately
+    dispatch(setConnectionStatus(connection.status || 'disconnected'));
+    if (onConnectionSelect) {
+      onConnectionSelect(connection);
+    }
+    navigate(`/live-demo/db/${connection.id}`);
+  };
+  // (Removed duplicate handleDoubleClick with incomplete code)
   return (
     <div className="connection-manager">
       <div className="manager-header">
@@ -304,12 +277,6 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                       Connect
                     </>
                   )}
-                </button>
-              )}
-              {selectedConnection.status === 'connected' && selectedConnection.name !== 'Temporary Connection' && (
-                <button className="save-current-btn" onClick={handleSaveCurrentConnection}>
-                  <span className="btn-icon">💾</span>
-                  Save Changes
                 </button>
               )}
             </>
@@ -397,7 +364,10 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                 </div>
               </div>
 
-              <div className="card-content">
+              <div className="card-content" onDoubleClick={() => {
+                // Navigate to explorer page on double click
+                handleDoubleClick(connection);
+              }}>
                 {editingConnection === connection.id ? (
                   <input
                     type="text"
@@ -451,46 +421,10 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
 
       {showNewConnection && (
         <div className="new-connection-hint">
-          <p>💡 After connecting to a new database, click "Save Current" to add it to your saved connections.</p>
+          <p>💡 Use "New Connection" to add databases. Check "Save credentials securely" to store them automatically.</p>
         </div>
       )}
 
-      {/* Save Connection Dialog */}
-      {showSaveDialog && (
-        <div className="modal-overlay">
-          <div className="save-dialog">
-            <h4>Save Database Connection</h4>
-            <p>Save this connection for quick access later</p>
-            
-            <div className="save-form">
-              <label>Connection Name:</label>
-              <input
-                type="text"
-                value={newConnectionName}
-                onChange={(e) => setNewConnectionName(e.target.value)}
-                placeholder="Enter a name for this connection"
-                className="connection-name-input"
-              />
-              
-              <div className="connection-preview">
-                <strong>Database:</strong> {liveDemo.connectionConfig.database}<br/>
-                <strong>Host:</strong> {liveDemo.connectionConfig.host}:{liveDemo.connectionConfig.port}<br/>
-                <strong>Type:</strong> {liveDemo.connectionType}
-              </div>
-            </div>
-            
-            <div className="dialog-actions">
-              <button className="cancel-btn" onClick={() => setShowSaveDialog(false)}>
-                Cancel
-              </button>
-              <button className="save-btn" onClick={confirmSaveConnection}>
-                <span className="btn-icon">💾</span>
-                Save Connection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Connection Modal */}
       <ConnectionModal

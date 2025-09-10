@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, get_db
-from app.api.routes import database, query, analytics, websocket
+from app.api.routes import database, query, analytics, websocket, credentials
 from app.core.websocket_manager import WebSocketManager
 
 # Load environment variables
@@ -65,6 +65,7 @@ if settings.ENVIRONMENT == "production":
 app.include_router(database.router, prefix="/api/database", tags=["database"])
 app.include_router(query.router, prefix="/api/query", tags=["query"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(credentials.router, prefix="/api/credentials", tags=["credentials"])
 
 # WebSocket endpoint for real-time data
 @app.websocket("/ws")
