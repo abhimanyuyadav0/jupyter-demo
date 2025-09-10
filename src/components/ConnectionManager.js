@@ -8,10 +8,13 @@ import {
   loadSavedConnections,
   updateConnectionName,
   setConnectionStatus,
+  setConnectionConfig,
+  setConnectionType,
   setError
 } from '../redux/slices/jupyterSlice';
 import { connectionStorage } from '../services/connectionStorage';
 import { databaseAPI, apiUtils } from '../services/api';
+import ConnectionModal from './ConnectionModal';
 import './ConnectionManager.css';
 
 const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) => {
@@ -21,6 +24,9 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
   const [newConnectionName, setNewConnectionName] = useState('');
   const [editingConnection, setEditingConnection] = useState(null);
   const [showImportExport, setShowImportExport] = useState(false);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState(null);
+  const [connectingTo, setConnectingTo] = useState(null);
 
   // Load saved connections on component mount
   useEffect(() => {
@@ -73,14 +79,27 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
     console.log('✅ Connection saved successfully:', newConnection.name);
   };
 
-  const handleSelectConnection = async (connection) => {
-    if (connection.status === 'connected' && liveDemo.activeConnectionId === connection.id) {
-      // Already connected to this database
-      return;
+  const handleSelectConnection = (connection) => {
+    // Just select the connection, don't connect automatically
+    setSelectedConnection(connection);
+    dispatch(setActiveConnection(connection.id));
+    
+    // Update Redux state with connection details
+    dispatch(setConnectionConfig(connection.config));
+    dispatch(setConnectionType(connection.type));
+    
+    // Notify parent component
+    if (onConnectionSelect) {
+      onConnectionSelect(connection);
     }
+  };
 
+  const handleConnectToSelected = async (connection) => {
+    if (!connection) return;
+    
+    setConnectingTo(connection.id);
+    
     try {
-      dispatch(setConnectionStatus('connecting'));
       dispatch(setError(null));
 
       // Use the saved connection config but require password input
@@ -93,7 +112,7 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
       if (!connectionData.password) {
         const password = prompt(`Enter password for ${connection.name}:`);
         if (!password) {
-          dispatch(setConnectionStatus('disconnected'));
+          setConnectingTo(null);
           return;
         }
         connectionData.password = password;
@@ -109,21 +128,13 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
           lastConnected: new Date().toISOString()
         }));
         
-        // Set as active connection
-        dispatch(setActiveConnection(connection.id));
         dispatch(setConnectionStatus('connected'));
-        
-        // Notify parent component
-        if (onConnectionSelect) {
-          onConnectionSelect(connection);
-        }
         
         console.log('✅ Connected to saved database:', connection.name);
       } else {
         throw new Error(result.message || 'Connection failed');
       }
     } catch (error) {
-      dispatch(setConnectionStatus('disconnected'));
       dispatch(updateConnectionStatus({
         connectionId: connection.id,
         status: 'disconnected'
@@ -132,6 +143,33 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
       const errorMessage = apiUtils.formatError(error);
       dispatch(setError(`Failed to connect to ${connection.name}: ${errorMessage}`));
       console.error('❌ Connection failed:', error);
+    }
+    
+    setConnectingTo(null);
+  };
+
+  const handleDisconnectFromSelected = async (connection) => {
+    if (!connection) return;
+    
+    try {
+      await databaseAPI.disconnect();
+      
+      dispatch(updateConnectionStatus({
+        connectionId: connection.id,
+        status: 'disconnected'
+      }));
+      
+      dispatch(setConnectionStatus('disconnected'));
+      
+      console.log('✅ Disconnected from database:', connection.name);
+    } catch (error) {
+      console.warn('⚠️ Error disconnecting:', error);
+      // Force disconnect in UI even if API call failed
+      dispatch(updateConnectionStatus({
+        connectionId: connection.id,
+        status: 'disconnected'
+      }));
+      dispatch(setConnectionStatus('disconnected'));
     }
   };
 
@@ -197,14 +235,53 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
   return (
     <div className="connection-manager">
       <div className="manager-header">
-        <h3>Database Connectionss</h3>
+        <h3>Database Connections</h3>
         <div className="manager-actions">
-          {liveDemo.isConnected && (
-            <button className="save-current-btn" onClick={handleSaveCurrentConnection}>
-              <span className="btn-icon">💾</span>
-              Save Current
-            </button>
+          {selectedConnection && (
+            <>
+              {selectedConnection.status === 'connected' ? (
+                <button 
+                  className="disconnect-current-btn" 
+                  onClick={() => handleDisconnectFromSelected(selectedConnection)}
+                  disabled={connectingTo === selectedConnection.id}
+                >
+                  <span className="btn-icon">🔌</span>
+                  Disconnect
+                </button>
+              ) : (
+                <button 
+                  className="connect-current-btn" 
+                  onClick={() => handleConnectToSelected(selectedConnection)}
+                  disabled={connectingTo === selectedConnection.id}
+                >
+                  {connectingTo === selectedConnection.id ? (
+                    <>
+                      <span className="spinner"></span>
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <span className="btn-icon">🔗</span>
+                      Connect
+                    </>
+                  )}
+                </button>
+              )}
+              {selectedConnection.status === 'connected' && selectedConnection.name !== 'Temporary Connection' && (
+                <button className="save-current-btn" onClick={handleSaveCurrentConnection}>
+                  <span className="btn-icon">💾</span>
+                  Save Changes
+                </button>
+              )}
+            </>
           )}
+          <button 
+            className="new-connection-btn" 
+            onClick={() => setShowConnectionModal(true)}
+          >
+            <span className="btn-icon">➕</span>
+            New Connection
+          </button>
           <button 
             className="import-export-btn" 
             onClick={() => setShowImportExport(!showImportExport)}
@@ -244,47 +321,20 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
         ) : (
           <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', width: '100%' }}>{
             liveDemo.connections.map(connection => (
-              <div 
-                key={connection.id} 
-                className={`connection-item ${liveDemo.activeConnectionId === connection.id ? 'active' : ''}`}
-              >
-                <div className="connection-info" onClick={() => handleSelectConnection(connection)}>
-                  <div className="connection-header">
-                    <span className="connection-status">
-                      {getConnectionStatusIcon(connection.status)}
-                    </span>
-                    {editingConnection === connection.id ? (
-                      <input
-                        type="text"
-                        defaultValue={connection.name}
-                        className="connection-name-input"
-                        onBlur={(e) => handleRenameConnection(connection.id, e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            handleRenameConnection(connection.id, e.target.value);
-                          }
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <span className="connection-name" title={connection.name}>
-                        {connection.name}
-                      </span>
-                    )}
-                    <span className="connection-type">{connection.type}</span>
-                  </div>
-                  
-                  <div className="connection-details">
-                    <span className="connection-host">
-                      {connection.config.host}:{connection.config.port}/{connection.config.database}
-                    </span>
-                    <span className="connection-time">
-                      {getTimeAgo(connection.lastConnected)}
-                    </span>
-                  </div>
+            <div 
+              key={connection.id} 
+              className={`connection-card ${selectedConnection?.id === connection.id ? 'selected' : ''} ${connection.status}`}
+              onClick={() => handleSelectConnection(connection)}
+            >
+              <div className="card-header">
+                <div className="card-status">
+                  <span className="status-indicator">
+                    {getConnectionStatusIcon(connection.status)}
+                  </span>
+                  <span className="connection-type-badge">{connection.type}</span>
                 </div>
                 
-                <div className="connection-actions">
+                <div className="card-actions">
                   <button
                     className="edit-btn"
                     onClick={(e) => {
@@ -307,6 +357,47 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                   </button>
                 </div>
               </div>
+
+              <div className="card-content">
+                {editingConnection === connection.id ? (
+                  <input
+                    type="text"
+                    defaultValue={connection.name}
+                    className="connection-name-input"
+                    onBlur={(e) => handleRenameConnection(connection.id, e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRenameConnection(connection.id, e.target.value);
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                  />
+                ) : (
+                  <h4 className="connection-name" title={connection.name}>
+                    {connection.name}
+                  </h4>
+                )}
+                
+                <div className="connection-details">
+                  <span className="connection-host">
+                    {connection.config.host}:{connection.config.port}
+                  </span>
+                  <span className="connection-database">
+                    📊 {connection.config.database}
+                  </span>
+                  <span className="connection-time">
+                    🕒 {getTimeAgo(connection.lastConnected)}
+                  </span>
+                </div>
+              </div>
+
+              {selectedConnection?.id === connection.id && (
+                <div className="selected-indicator">
+                  <span>✓</span>
+                </div>
+              )}
+            </div>
             ))
           }</div>
         )}
@@ -354,6 +445,16 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
           </div>
         </div>
       )}
+
+      {/* Connection Modal */}
+      <ConnectionModal
+        isOpen={showConnectionModal}
+        onClose={() => setShowConnectionModal(false)}
+        onSuccess={(newConnection) => {
+          console.log('✅ New connection created:', newConnection.name || 'Temporary connection');
+          // Modal will handle Redux updates
+        }}
+      />
     </div>
   );
 };

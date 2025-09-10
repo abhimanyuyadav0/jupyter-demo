@@ -28,6 +28,9 @@
 }
 
 .save-current-btn,
+.connect-current-btn,
+.disconnect-current-btn,
+.new-connection-btn,
 .import-export-btn {
   display: flex;
   align-items: center;
@@ -49,6 +52,48 @@
 .save-current-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 16px -4px rgba(16, 185, 129, 0.3);
+}
+
+.connect-current-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.connect-current-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(59, 130, 246, 0.3);
+}
+
+.connect-current-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.disconnect-current-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.disconnect-current-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(239, 68, 68, 0.3);
+}
+
+.disconnect-current-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.new-connection-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.new-connection-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(139, 92, 246, 0.3);
 }
 
 .import-export-btn {
@@ -419,6 +464,148 @@
 
 .connections-list::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Connection Cards */
+.connection-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  background: white;
+  border-radius: 1rem;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.connection-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px -4px rgba(102, 126, 234, 0.2);
+  border-color: #cbd5e1;
+}
+
+.connection-card.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  box-shadow: 0 8px 16px -4px rgba(102, 126, 234, 0.3);
+}
+
+.connection-card.connected {
+  border-left: 4px solid #10b981;
+}
+
+.connection-card.connecting {
+  border-left: 4px solid #f59e0b;
+}
+
+.connection-card.disconnected {
+  border-left: 4px solid #ef4444;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.card-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-indicator {
+  font-size: 1rem;
+  animation: pulse 2s infinite;
+}
+
+.connection-type-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card-content {
+  flex: 1;
+}
+
+.connection-card .connection-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 1rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-card .connection-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.connection-host,
+.connection-database,
+.connection-time {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Monaco', monospace;
+}
+
+.connection-host {
+  color: #374151;
+  font-weight: 500;
+}
+
+.selected-indicator {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 8px -2px rgba(16, 185, 129, 0.3);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Responsive Design */
