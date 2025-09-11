@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import DatabaseConnection from "./DatabaseConnection";
 import QueryEditor from "./QueryEditor";
 import DataVisualization from "./DataVisualization";
-import AnalyticsPanelSimple from "./AnalyticsPanelSimple";
+import AnalyticsPanelReal from "./AnalyticsPanelReal";
 import "./LiveDemo.css";
 import { connectionStorage } from "../../api/services/connections/connectionStorage";
 import { apiUtils } from "../../api/services/apiUtils";
@@ -117,7 +117,7 @@ const LiveDemo = () => {
             />
           )}
           {activeTab === "analytics" && (
-            <AnalyticsPanelSimple
+            <AnalyticsPanelReal
               connections={connections || []}
               loadingConnections={loadingServerConnections}
               refetchConnections={refetchConnections}

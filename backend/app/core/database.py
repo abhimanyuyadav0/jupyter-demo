@@ -69,7 +69,11 @@ class DatabaseManager:
     async def execute_query(self, query: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """Execute SQL query and return results"""
         if not self.is_connected:
-            raise Exception("Database not connected")
+            # Auto-connect if not connected
+            try:
+                await self.connect()
+            except Exception as e:
+                raise Exception(f"Failed to connect to database: {str(e)}")
         
         try:
             # Clean and validate query
@@ -110,7 +114,11 @@ class DatabaseManager:
     async def get_table_info(self) -> List[Dict[str, Any]]:
         """Get database schema information"""
         if not self.is_connected:
-            raise Exception("Database not connected")
+            # Auto-connect if not connected
+            try:
+                await self.connect()
+            except Exception as e:
+                raise Exception(f"Failed to connect to database: {str(e)}")
         
         try:
             schema_query = """
@@ -136,7 +144,11 @@ class DatabaseManager:
     async def get_table_stats(self, table_name: str) -> Dict[str, Any]:
         """Get basic statistics for a table"""
         if not self.is_connected:
-            raise Exception("Database not connected")
+            # Auto-connect if not connected
+            try:
+                await self.connect()
+            except Exception as e:
+                raise Exception(f"Failed to connect to database: {str(e)}")
         
         try:
             stats_query = f"""

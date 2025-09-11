@@ -76,11 +76,7 @@ async def execute_query(
     """
     Execute SQL query and return results
     """
-    if not db_manager.is_connected:
-        raise HTTPException(
-            status_code=400,
-            detail="Database not connected. Please connect to database first."
-        )
+    # Database will auto-connect if needed
     
     # Validate query for security
     if not validate_query(request.query):
