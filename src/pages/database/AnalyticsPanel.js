@@ -1,385 +1,114 @@
 import React, { useState, useEffect } from "react";
-import { useSelector, useDispatch } from "react-redux";
-import {
-  setAnalyticsData,
-  setRealTimeData,
-} from "../../redux/slices/jupyterSlice";
+import { Jupyter, Cell } from "@datalayer/jupyter-react";
 import "./AnalyticsPanel.css";
-import { analyticsService as analyticsAPI } from "../../api/services/analytics";
-import { websocketManager } from "../../api/handlers/axios";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiUtils } from "../../api/services/apiUtils";
 
-const AnalyticsPanel = ({connections, loadingConnections, refetchConnections, serverError}) => {
-  const dispatch = useDispatch();
-  const { liveDemo } = useSelector((state) => state.jupyter);
-  const [realTimeData, setLocalRealTimeData] = useState([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-
-  // WebSocket setup
-  useEffect(() => {
-    // Set up WebSocket event listeners
-    const handleConnected = () => {
-      setWsConnected(true);
-      console.log("✅ WebSocket connected to analytics");
-    };
-
-    const handleDisconnected = () => {
-      setWsConnected(false);
-      setIsStreaming(false);
-      console.log("🔌 WebSocket disconnected from analytics");
-    };
-
-    const handleRealTimeData = (data) => {
-      if (data.type === "real_time_data") {
-        const newDataPoint = {
-          timestamp: new Date(data.timestamp),
-          ...data.data,
-        };
-        setLocalRealTimeData((prev) => [...prev.slice(-19), newDataPoint]);
-        dispatch(
-          setRealTimeData([...liveDemo.realTimeData.slice(-19), newDataPoint])
-        );
-      }
-    };
-
-    const handleError = (error) => {
-      console.error("❌ WebSocket error in analytics:", error);
-      setIsStreaming(false);
-    };
-
-    // Add event listeners
-    websocketManager.on("connected", handleConnected);
-    websocketManager.on("disconnected", handleDisconnected);
-    websocketManager.on("real_time_data", handleRealTimeData);
-    websocketManager.on("error", handleError);
-
-    // Connect if not already connected
-    if (websocketManager.getConnectionState() === "DISCONNECTED") {
-      websocketManager.connect();
-    }
-
-    // Cleanup
-    return () => {
-      websocketManager.off("connected", handleConnected);
-      websocketManager.off("disconnected", handleDisconnected);
-      websocketManager.off("real_time_data", handleRealTimeData);
-      websocketManager.off("error", handleError);
-    };
-  }, [dispatch, liveDemo.realTimeData]);
-
-  const { data: metricsData } = useQuery({
-    queryKey: ["analytics-metrics", liveDemo.isConnected],
-    enabled: !!liveDemo.isConnected,
-    queryFn: () => analyticsAPI.getMetrics(),
-  });
+const AnalyticsPanel = ({
+  connections,
+  loadingConnections,
+  refetchConnections,
+  serverError,
+}) => {
+  const [jupyterError, setJupyterError] = useState(false);
 
   useEffect(() => {
-    if (metricsData?.status === "success") {
-      dispatch(
-        setAnalyticsData({
-          totalRecords: metricsData.metrics.total_users || 0,
-          chartData: metricsData.trends || [],
-          insights: metricsData.insights || [],
-        })
-      );
-    }
-  }, [metricsData, dispatch]);
-
-  const exportMutation = useMutation({
-    mutationFn: (exportData) => analyticsAPI.exportNotebook(exportData),
-  });
-
-  const exportToJupyter = async () => {
+    // Check if Jupyter components are available
     try {
-      const exportData = {
-        title: "Real-time Analytics Dashboard",
-        description: "Generated from Jupyter Frontend Live Demo",
-        queries: [
-          "SELECT COUNT(*) as total_users FROM users;",
-          "SELECT DATE_TRUNC('day', order_date) as day, COUNT(*) as orders, SUM(total_amount) as revenue FROM orders GROUP BY day ORDER BY day DESC LIMIT 7;",
-          "SELECT p.name, p.category, COUNT(o.id) as order_count FROM products p LEFT JOIN orders o ON p.id = o.user_id GROUP BY p.id, p.name, p.category;",
-        ],
-      };
-
-      const result = await exportMutation.mutateAsync(exportData);
-      if (result.status === "success") {
-        const filename = result.filename || "analytics_notebook.ipynb";
-        apiUtils.downloadFile(result.notebook, filename, "application/json");
-      } else {
-        throw new Error("Export failed");
+      if (typeof Jupyter === 'undefined' || typeof Cell === 'undefined') {
+        setJupyterError(true);
       }
     } catch (error) {
-      const notebookCode = generateJupyterNotebook();
-      apiUtils.downloadFile(
-        notebookCode,
-        "analytics_notebook.ipynb",
-        "application/json"
-      );
+      console.warn('Jupyter components not available:', error);
+      setJupyterError(true);
     }
-  };
+  }, []);
+  const sampleNotebookCode = `
+# Real-time Analytics with pandas
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
 
-  const generateJupyterNotebook = () => {
-    const notebook = {
-      cells: [
-        {
-          cell_type: "markdown",
-          metadata: {},
-          source: [
-            "# Real-time Analytics Dashboard\n",
-            "\n",
-            "This notebook contains the analytics code generated from the live demo.\n",
-          ],
-        },
-        {
-          cell_type: "code",
-          execution_count: null,
-          metadata: {},
-          outputs: [],
-          source: [
-            "import pandas as pd\n",
-            "import numpy as np\n",
-            "import matplotlib.pyplot as plt\n",
-            "import seaborn as sns\n",
-            "from datetime import datetime, timedelta\n",
-            "\n",
-            "# Database connection setup\n",
-            `# Connection: ${liveDemo.connectionType}\n`,
-            "# Replace with your actual connection details\n",
-          ],
-        },
-        {
-          cell_type: "code",
-          execution_count: null,
-          metadata: {},
-          outputs: [],
-          source: [
-            "# Real-time data analysis\n",
-            "def analyze_real_time_data():\n",
-            "    # Fetch latest data\n",
-            '    query = """\n',
-            "    SELECT \n",
-            "        timestamp,\n",
-            "        COUNT(*) as transactions,\n",
-            "        SUM(revenue) as total_revenue,\n",
-            "        COUNT(DISTINCT user_id) as unique_users\n",
-            "    FROM events \n",
-            "    WHERE timestamp >= NOW() - INTERVAL '1 hour'\n",
-            "    GROUP BY timestamp\n",
-            "    ORDER BY timestamp DESC\n",
-            '    """\n',
-            "    \n",
-            "    df = pd.read_sql_query(query, conn)\n",
-            "    return df\n",
-          ],
-        },
-        {
-          cell_type: "code",
-          execution_count: null,
-          metadata: {},
-          outputs: [],
-          source: [
-            "# Visualization functions\n",
-            "def create_real_time_dashboard():\n",
-            "    fig, axes = plt.subplots(2, 2, figsize=(15, 10))\n",
-            "    \n",
-            "    # Revenue trend\n",
-            "    axes[0, 0].plot(df['timestamp'], df['total_revenue'])\n",
-            "    axes[0, 0].set_title('Revenue Trend')\n",
-            "    \n",
-            "    # User activity\n",
-            "    axes[0, 1].bar(range(len(df)), df['unique_users'])\n",
-            "    axes[0, 1].set_title('Active Users')\n",
-            "    \n",
-            "    # Transaction volume\n",
-            "    axes[1, 0].plot(df['timestamp'], df['transactions'], marker='o')\n",
-            "    axes[1, 0].set_title('Transaction Volume')\n",
-            "    \n",
-            "    # Performance metrics\n",
-            "    metrics = ['Revenue', 'Users', 'Transactions']\n",
-            "    values = [df['total_revenue'].sum(), df['unique_users'].sum(), df['transactions'].sum()]\n",
-            "    axes[1, 1].pie(values, labels=metrics, autopct='%1.1f%%')\n",
-            "    axes[1, 1].set_title('Performance Distribution')\n",
-            "    \n",
-            "    plt.tight_layout()\n",
-            "    plt.show()\n",
-          ],
-        },
-      ],
-      metadata: {
-        kernelspec: {
-          display_name: "Python 3",
-          language: "python",
-          name: "python3",
-        },
-        language_info: {
-          name: "python",
-          version: "3.8.0",
-        },
-      },
-      nbformat: 4,
-      nbformat_minor: 4,
-    };
+np.random.seed(0)
+now = datetime.now()
+minutes = pd.date_range(now - timedelta(minutes=30), now, freq='1min')
 
-    return JSON.stringify(notebook, null, 2);
-  };
+df = pd.DataFrame({
+    'timestamp': minutes,
+    'users': np.random.randint(20, 120, size=len(minutes)),
+    'transactions': np.random.randint(5, 50, size=len(minutes)),
+    'revenue': np.random.uniform(100, 2000, size=len(minutes)).round(2)
+})
+
+summary = df.agg({
+    'users': ['mean', 'max'],
+    'transactions': ['mean', 'max'],
+    'revenue': ['sum', 'mean']
+})
+
+print('Last 30 min summary:')
+print(summary)
+
+# Show head
+df.head(10)
+`;
+
+  // Fallback component if Jupyter fails
+  if (jupyterError) {
+    return (
+      <div className="analytics-panel">
+        <div className="panel-header">
+          <h3>Analytics Dashboard</h3>
+        </div>
+        <div className="analytics-content">
+          <div style={{
+            padding: 24,
+            textAlign: "center",
+            background: "#fef3c7",
+            border: "1px solid #f59e0b",
+            borderRadius: 8,
+            color: "#92400e"
+          }}>
+            <h4 style={{ margin: "0 0 8px 0" }}>Jupyter Components Not Available</h4>
+            <p style={{ margin: 0, fontSize: 14 }}>
+              The Jupyter React components are currently not loading properly. 
+              Please check the console for more details or use the simplified analytics view.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="analytics-panel">
       <div className="panel-header">
-        <h3>Live Analytics Dashboard</h3>
-        <div className="panel-controls">
-          <button
-            className="export-btn"
-            onClick={exportToJupyter}
-            disabled={!liveDemo.isConnected}
-          >
-            <span className="btn-icon">📁</span>
-            Export to Jupyter
-          </button>
-        </div>
+        <h3>Analytics Dashboard</h3>
       </div>
 
       <div className="analytics-content">
-        {/* Key Metrics */}
-        <div className="metrics-grid">
-          {liveDemo.analyticsData.insights.map((insight, index) => (
-            <div key={index} className="metric-card">
-              <div className="metric-header">
-                <span className="metric-title">{insight.title}</span>
-                <span
-                  className={`metric-trend ${
-                    insight.trend.startsWith("+") ? "positive" : "neutral"
-                  }`}
-                >
-                  {insight.trend}
-                </span>
-              </div>
-              <div className="metric-value">{insight.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Analytics Insights */}
-        <div className="insights-section">
-          <h4>AI-Powered Insights</h4>
-          <div className="insights-list">
-            <div className="insight-item">
-              <span className="insight-icon">📈</span>
-              <div className="insight-content">
-                <h5>Revenue Growth Detected</h5>
-                <p>
-                  Revenue has increased by 12% in the last hour compared to the
-                  previous period.
-                </p>
+        <div
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            overflow: "hidden",
+          }}
+        >
+          <Jupyter>
+            <div
+              style={{
+                padding: 12,
+                background: "#f9fafb",
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              <strong>Jupyter Code Cell</strong>
+              <div style={{ color: "#64748b", fontSize: 12 }}>
+                Run Python snippets inline via @datalayer/jupyter-react
               </div>
             </div>
-            <div className="insight-item">
-              <span className="insight-icon">👥</span>
-              <div className="insight-content">
-                <h5>User Activity Spike</h5>
-                <p>
-                  Unusual user activity detected. Consider scaling resources to
-                  handle increased load.
-                </p>
-              </div>
+            <div style={{ padding: 12 }}>
+              <Cell source={sampleNotebookCode} autoRun={false} />
             </div>
-            <div className="insight-item">
-              <span className="insight-icon">⚠️</span>
-              <div className="insight-content">
-                <h5>Performance Alert</h5>
-                <p>
-                  Transaction processing time has increased by 8%. Monitor
-                  system performance.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Jupyter Integration */}
-        <div className="jupyter-integration">
-          <h4>Jupyter Integration</h4>
-          <div className="integration-info">
-            <div className="integration-item">
-              <span className="integration-icon">📊</span>
-              <div className="integration-content">
-                <h5>Live Data Analysis</h5>
-                <p>
-                  All streaming data can be analyzed in real-time using pandas
-                  and numpy
-                </p>
-              </div>
-            </div>
-            <div className="integration-item">
-              <span className="integration-icon">🤖</span>
-              <div className="integration-content">
-                <h5>Machine Learning</h5>
-                <p>
-                  Apply ML models to predict trends and detect anomalies in live
-                  data
-                </p>
-              </div>
-            </div>
-            <div className="integration-item">
-              <span className="integration-icon">📈</span>
-              <div className="integration-content">
-                <h5>Interactive Visualizations</h5>
-                <p>
-                  Create dynamic charts and dashboards using matplotlib, plotly,
-                  and bokeh
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="jupyter-code-example">
-            <h5>Live Analysis Code:</h5>
-            <div className="code-preview">
-              <pre>
-                {`# Real-time analytics in Jupyter
-import pandas as pd
-import numpy as np
-from datetime import datetime
-
-# Stream processing function
-def process_stream_data(new_data):
-    # Convert to DataFrame
-    df = pd.DataFrame(new_data)
-    
-    # Calculate moving averages
-    df['revenue_ma'] = df['revenue'].rolling(window=5).mean()
-    df['users_ma'] = df['users'].rolling(window=5).mean()
-    
-    # Detect anomalies
-    df['revenue_anomaly'] = np.abs(df['revenue'] - df['revenue_ma']) > 2 * df['revenue'].std()
-    
-    # Generate alerts
-    if df['revenue_anomaly'].iloc[-1]:
-        print(f"⚠️ Revenue anomaly detected at {datetime.now()}")
-    
-    return df
-
-# Visualization update
-def update_dashboard(df):
-    plt.figure(figsize=(12, 8))
-    
-    plt.subplot(2, 2, 1)
-    plt.plot(df.index, df['revenue'], label='Revenue')
-    plt.plot(df.index, df['revenue_ma'], label='Moving Average')
-    plt.title('Real-time Revenue')
-    plt.legend()
-    
-    plt.subplot(2, 2, 2)
-    plt.scatter(df['users'], df['revenue'], alpha=0.7)
-    plt.title('Users vs Revenue')
-    
-    plt.tight_layout()
-    plt.show()`}
-              </pre>
-            </div>
-          </div>
+          </Jupyter>
         </div>
       </div>
     </div>
@@ -387,3 +116,4 @@ def update_dashboard(df):
 };
 
 export default AnalyticsPanel;
+

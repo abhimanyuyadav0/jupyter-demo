@@ -134,7 +134,7 @@ ORDER BY revenue DESC;`
     setCurrentQuery('');
     setQueryResults([]);
   };
-console.log(connection);
+
   return (
     <div className="query-editor">
       <div className="editor-header">
