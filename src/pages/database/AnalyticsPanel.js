@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { setAnalyticsData, setRealTimeData } from '../../redux/slices/jupyterSlice';
-import './AnalyticsPanel.css';
-import { analyticsAPI, websocketManager, apiUtils } from '../../api/handlers/axios';
+import React, { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import {
+  setAnalyticsData,
+  setRealTimeData,
+} from "../../redux/slices/jupyterSlice";
+import "./AnalyticsPanel.css";
+import { analyticsService as analyticsAPI } from "../../api/services/analytics";
+import { websocketManager } from "../../api/handlers/axios";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiUtils } from "../../api/services/apiUtils";
 
-const AnalyticsPanel = () => {
+const AnalyticsPanel = ({connections, loadingConnections, refetchConnections, serverError}) => {
   const dispatch = useDispatch();
   const { liveDemo } = useSelector((state) => state.jupyter);
   const [realTimeData, setLocalRealTimeData] = useState([]);
@@ -16,90 +22,74 @@ const AnalyticsPanel = () => {
     // Set up WebSocket event listeners
     const handleConnected = () => {
       setWsConnected(true);
-      console.log('✅ WebSocket connected to analytics');
+      console.log("✅ WebSocket connected to analytics");
     };
 
     const handleDisconnected = () => {
       setWsConnected(false);
       setIsStreaming(false);
-      console.log('🔌 WebSocket disconnected from analytics');
+      console.log("🔌 WebSocket disconnected from analytics");
     };
 
     const handleRealTimeData = (data) => {
-      if (data.type === 'real_time_data') {
+      if (data.type === "real_time_data") {
         const newDataPoint = {
           timestamp: new Date(data.timestamp),
-          ...data.data
+          ...data.data,
         };
-        setLocalRealTimeData(prev => [...prev.slice(-19), newDataPoint]);
-        dispatch(setRealTimeData([...liveDemo.realTimeData.slice(-19), newDataPoint]));
+        setLocalRealTimeData((prev) => [...prev.slice(-19), newDataPoint]);
+        dispatch(
+          setRealTimeData([...liveDemo.realTimeData.slice(-19), newDataPoint])
+        );
       }
     };
 
     const handleError = (error) => {
-      console.error('❌ WebSocket error in analytics:', error);
+      console.error("❌ WebSocket error in analytics:", error);
       setIsStreaming(false);
     };
 
     // Add event listeners
-    websocketManager.on('connected', handleConnected);
-    websocketManager.on('disconnected', handleDisconnected);
-    websocketManager.on('real_time_data', handleRealTimeData);
-    websocketManager.on('error', handleError);
+    websocketManager.on("connected", handleConnected);
+    websocketManager.on("disconnected", handleDisconnected);
+    websocketManager.on("real_time_data", handleRealTimeData);
+    websocketManager.on("error", handleError);
 
     // Connect if not already connected
-    if (websocketManager.getConnectionState() === 'DISCONNECTED') {
+    if (websocketManager.getConnectionState() === "DISCONNECTED") {
       websocketManager.connect();
     }
 
     // Cleanup
     return () => {
-      websocketManager.off('connected', handleConnected);
-      websocketManager.off('disconnected', handleDisconnected);
-      websocketManager.off('real_time_data', handleRealTimeData);
-      websocketManager.off('error', handleError);
+      websocketManager.off("connected", handleConnected);
+      websocketManager.off("disconnected", handleDisconnected);
+      websocketManager.off("real_time_data", handleRealTimeData);
+      websocketManager.off("error", handleError);
     };
   }, [dispatch, liveDemo.realTimeData]);
 
-  // Load initial analytics data
+  const { data: metricsData } = useQuery({
+    queryKey: ["analytics-metrics", liveDemo.isConnected],
+    enabled: !!liveDemo.isConnected,
+    queryFn: () => analyticsAPI.getMetrics(),
+  });
+
   useEffect(() => {
-    const loadAnalytics = async () => {
-      try {
-        const metrics = await analyticsAPI.getMetrics();
-        if (metrics.status === 'success') {
-          dispatch(setAnalyticsData({
-            totalRecords: metrics.metrics.total_users || 0,
-            chartData: metrics.trends || [],
-            insights: metrics.insights || []
-          }));
-        }
-      } catch (error) {
-        console.warn('Could not load analytics data:', error);
-      }
-    };
-
-    if (liveDemo.isConnected) {
-      loadAnalytics();
+    if (metricsData?.status === "success") {
+      dispatch(
+        setAnalyticsData({
+          totalRecords: metricsData.metrics.total_users || 0,
+          chartData: metricsData.trends || [],
+          insights: metricsData.insights || [],
+        })
+      );
     }
-  }, [liveDemo.isConnected, dispatch]);
+  }, [metricsData, dispatch]);
 
-  const toggleStreaming = () => {
-    if (!wsConnected) {
-      console.warn('⚠️ WebSocket not connected, cannot start streaming');
-      return;
-    }
-
-    if (isStreaming) {
-      websocketManager.stopStream();
-      setIsStreaming(false);
-      console.log('⏸️ Stopped real-time data streaming');
-    } else {
-      websocketManager.startStream();
-      setIsStreaming(true);
-      setLocalRealTimeData([]); // Clear previous data
-      console.log('▶️ Started real-time data streaming');
-    }
-  };
+  const exportMutation = useMutation({
+    mutationFn: (exportData) => analyticsAPI.exportNotebook(exportData),
+  });
 
   const exportToJupyter = async () => {
     try {
@@ -109,24 +99,24 @@ const AnalyticsPanel = () => {
         queries: [
           "SELECT COUNT(*) as total_users FROM users;",
           "SELECT DATE_TRUNC('day', order_date) as day, COUNT(*) as orders, SUM(total_amount) as revenue FROM orders GROUP BY day ORDER BY day DESC LIMIT 7;",
-          "SELECT p.name, p.category, COUNT(o.id) as order_count FROM products p LEFT JOIN orders o ON p.id = o.user_id GROUP BY p.id, p.name, p.category;"
-        ]
+          "SELECT p.name, p.category, COUNT(o.id) as order_count FROM products p LEFT JOIN orders o ON p.id = o.user_id GROUP BY p.id, p.name, p.category;",
+        ],
       };
 
-      const result = await analyticsAPI.exportNotebook(exportData);
-      
-      if (result.status === 'success') {
-        const filename = result.filename || 'analytics_notebook.ipynb';
-        apiUtils.downloadFile(result.notebook, filename, 'application/json');
-        console.log('📁 Successfully exported Jupyter notebook');
+      const result = await exportMutation.mutateAsync(exportData);
+      if (result.status === "success") {
+        const filename = result.filename || "analytics_notebook.ipynb";
+        apiUtils.downloadFile(result.notebook, filename, "application/json");
       } else {
-        throw new Error('Export failed');
+        throw new Error("Export failed");
       }
     } catch (error) {
-      console.error('❌ Failed to export notebook:', error);
-      // Fallback to local generation
       const notebookCode = generateJupyterNotebook();
-      apiUtils.downloadFile(notebookCode, 'analytics_notebook.ipynb', 'application/json');
+      apiUtils.downloadFile(
+        notebookCode,
+        "analytics_notebook.ipynb",
+        "application/json"
+      );
     }
   };
 
@@ -134,16 +124,16 @@ const AnalyticsPanel = () => {
     const notebook = {
       cells: [
         {
-          cell_type: 'markdown',
+          cell_type: "markdown",
           metadata: {},
           source: [
             "# Real-time Analytics Dashboard\n",
             "\n",
-            "This notebook contains the analytics code generated from the live demo.\n"
-          ]
+            "This notebook contains the analytics code generated from the live demo.\n",
+          ],
         },
         {
-          cell_type: 'code',
+          cell_type: "code",
           execution_count: null,
           metadata: {},
           outputs: [],
@@ -156,11 +146,11 @@ const AnalyticsPanel = () => {
             "\n",
             "# Database connection setup\n",
             `# Connection: ${liveDemo.connectionType}\n`,
-            "# Replace with your actual connection details\n"
-          ]
+            "# Replace with your actual connection details\n",
+          ],
         },
         {
-          cell_type: 'code',
+          cell_type: "code",
           execution_count: null,
           metadata: {},
           outputs: [],
@@ -168,7 +158,7 @@ const AnalyticsPanel = () => {
             "# Real-time data analysis\n",
             "def analyze_real_time_data():\n",
             "    # Fetch latest data\n",
-            "    query = \"\"\"\n",
+            '    query = """\n',
             "    SELECT \n",
             "        timestamp,\n",
             "        COUNT(*) as transactions,\n",
@@ -178,14 +168,14 @@ const AnalyticsPanel = () => {
             "    WHERE timestamp >= NOW() - INTERVAL '1 hour'\n",
             "    GROUP BY timestamp\n",
             "    ORDER BY timestamp DESC\n",
-            "    \"\"\"\n",
+            '    """\n',
             "    \n",
             "    df = pd.read_sql_query(query, conn)\n",
-            "    return df\n"
-          ]
+            "    return df\n",
+          ],
         },
         {
-          cell_type: 'code',
+          cell_type: "code",
           execution_count: null,
           metadata: {},
           outputs: [],
@@ -213,25 +203,25 @@ const AnalyticsPanel = () => {
             "    axes[1, 1].set_title('Performance Distribution')\n",
             "    \n",
             "    plt.tight_layout()\n",
-            "    plt.show()\n"
-          ]
-        }
+            "    plt.show()\n",
+          ],
+        },
       ],
       metadata: {
         kernelspec: {
-          display_name: 'Python 3',
-          language: 'python',
-          name: 'python3'
+          display_name: "Python 3",
+          language: "python",
+          name: "python3",
         },
         language_info: {
-          name: 'python',
-          version: '3.8.0'
-        }
+          name: "python",
+          version: "3.8.0",
+        },
       },
       nbformat: 4,
-      nbformat_minor: 4
+      nbformat_minor: 4,
     };
-    
+
     return JSON.stringify(notebook, null, 2);
   };
 
@@ -240,14 +230,6 @@ const AnalyticsPanel = () => {
       <div className="panel-header">
         <h3>Live Analytics Dashboard</h3>
         <div className="panel-controls">
-          <button
-            className={`streaming-btn ${isStreaming ? 'active' : ''}`}
-            onClick={toggleStreaming}
-            disabled={!liveDemo.isConnected || !wsConnected}
-          >
-            <span className="btn-icon">{isStreaming ? '⏸️' : '▶️'}</span>
-            {isStreaming ? 'Stop Stream' : 'Start Stream'}
-          </button>
           <button
             className="export-btn"
             onClick={exportToJupyter}
@@ -266,7 +248,11 @@ const AnalyticsPanel = () => {
             <div key={index} className="metric-card">
               <div className="metric-header">
                 <span className="metric-title">{insight.title}</span>
-                <span className={`metric-trend ${insight.trend.startsWith('+') ? 'positive' : 'neutral'}`}>
+                <span
+                  className={`metric-trend ${
+                    insight.trend.startsWith("+") ? "positive" : "neutral"
+                  }`}
+                >
                   {insight.trend}
                 </span>
               </div>
@@ -280,47 +266,58 @@ const AnalyticsPanel = () => {
           <div className="section-header">
             <h4>Real-time Data Stream</h4>
             <div className="stream-status">
-              <span className={`status-dot ${isStreaming && wsConnected ? 'active' : ''}`}></span>
+              <span
+                className={`status-dot ${
+                  isStreaming && wsConnected ? "active" : ""
+                }`}
+              ></span>
               <span>
-                {!wsConnected ? 'Disconnected' : isStreaming ? 'Streaming' : 'Stopped'}
+                {!wsConnected
+                  ? "Disconnected"
+                  : isStreaming
+                  ? "Streaming"
+                  : "Stopped"}
               </span>
             </div>
           </div>
-          
+
           <div className="stream-data">
             {realTimeData.length === 0 ? (
               <div className="no-stream-data">
                 <span className="stream-icon">📡</span>
                 <p>
-                  {!wsConnected 
-                    ? "WebSocket disconnected - reconnecting..." 
-                    : "Click \"Start Stream\" to begin receiving real-time data"
-                  }
+                  {!wsConnected
+                    ? "WebSocket disconnected - reconnecting..."
+                    : 'Click "Start Stream" to begin receiving real-time data'}
                 </p>
               </div>
             ) : (
               <div className="data-stream">
-                {realTimeData.slice(-10).reverse().map((dataPoint, index) => (
-                  <div key={index} className="data-point">
-                    <div className="data-timestamp">
-                      {dataPoint.timestamp.toLocaleTimeString()}
+                {realTimeData
+                  .slice(-10)
+                  .reverse()
+                  .map((dataPoint, index) => (
+                    <div key={index} className="data-point">
+                      <div className="data-timestamp">
+                        {dataPoint?.timestamp?.toLocaleTimeString()}
+                      </div>
+                      <div className="data-values">
+                        <span className="data-item">
+                          <strong>Users:</strong> {dataPoint.users}
+                        </span>
+                        <span className="data-item">
+                          <strong>Transactions:</strong>{" "}
+                          {dataPoint.transactions}
+                        </span>
+                        <span className="data-item">
+                          <strong>Revenue:</strong> ${dataPoint.revenue}
+                        </span>
+                        <span className="data-item">
+                          <strong>Value:</strong> {dataPoint.value}
+                        </span>
+                      </div>
                     </div>
-                    <div className="data-values">
-                      <span className="data-item">
-                        <strong>Users:</strong> {dataPoint.users}
-                      </span>
-                      <span className="data-item">
-                        <strong>Transactions:</strong> {dataPoint.transactions}
-                      </span>
-                      <span className="data-item">
-                        <strong>Revenue:</strong> ${dataPoint.revenue}
-                      </span>
-                      <span className="data-item">
-                        <strong>Value:</strong> {dataPoint.value}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
@@ -334,21 +331,30 @@ const AnalyticsPanel = () => {
               <span className="insight-icon">📈</span>
               <div className="insight-content">
                 <h5>Revenue Growth Detected</h5>
-                <p>Revenue has increased by 12% in the last hour compared to the previous period.</p>
+                <p>
+                  Revenue has increased by 12% in the last hour compared to the
+                  previous period.
+                </p>
               </div>
             </div>
             <div className="insight-item">
               <span className="insight-icon">👥</span>
               <div className="insight-content">
                 <h5>User Activity Spike</h5>
-                <p>Unusual user activity detected. Consider scaling resources to handle increased load.</p>
+                <p>
+                  Unusual user activity detected. Consider scaling resources to
+                  handle increased load.
+                </p>
               </div>
             </div>
             <div className="insight-item">
               <span className="insight-icon">⚠️</span>
               <div className="insight-content">
                 <h5>Performance Alert</h5>
-                <p>Transaction processing time has increased by 8%. Monitor system performance.</p>
+                <p>
+                  Transaction processing time has increased by 8%. Monitor
+                  system performance.
+                </p>
               </div>
             </div>
           </div>
@@ -362,21 +368,30 @@ const AnalyticsPanel = () => {
               <span className="integration-icon">📊</span>
               <div className="integration-content">
                 <h5>Live Data Analysis</h5>
-                <p>All streaming data can be analyzed in real-time using pandas and numpy</p>
+                <p>
+                  All streaming data can be analyzed in real-time using pandas
+                  and numpy
+                </p>
               </div>
             </div>
             <div className="integration-item">
               <span className="integration-icon">🤖</span>
               <div className="integration-content">
                 <h5>Machine Learning</h5>
-                <p>Apply ML models to predict trends and detect anomalies in live data</p>
+                <p>
+                  Apply ML models to predict trends and detect anomalies in live
+                  data
+                </p>
               </div>
             </div>
             <div className="integration-item">
               <span className="integration-icon">📈</span>
               <div className="integration-content">
                 <h5>Interactive Visualizations</h5>
-                <p>Create dynamic charts and dashboards using matplotlib, plotly, and bokeh</p>
+                <p>
+                  Create dynamic charts and dashboards using matplotlib, plotly,
+                  and bokeh
+                </p>
               </div>
             </div>
           </div>
@@ -385,7 +400,7 @@ const AnalyticsPanel = () => {
             <h5>Live Analysis Code:</h5>
             <div className="code-preview">
               <pre>
-{`# Real-time analytics in Jupyter
+                {`# Real-time analytics in Jupyter
 import pandas as pd
 import numpy as np
 from datetime import datetime

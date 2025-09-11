@@ -1,46 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setCurrentQuery, setQueryResults, setLoading, setError } from '../../redux/slices/jupyterSlice';
-import { queryAPI, apiUtils } from '../../api/handlers/axios';
+import { queryService as queryAPI } from '../../api/services/query';
+import { apiUtils } from '../../api/services/apiUtils';
 import './QueryEditor.css';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const QueryEditor = () => {
   const dispatch = useDispatch();
   const { liveDemo } = useSelector((state) => state.jupyter);
   const [queryHistory, setQueryHistory] = useState([]);
   const [sampleQueries, setSampleQueries] = useState([]);
+  const queryClient = useQueryClient();
 
-  // Load sample queries from backend
+  // Load sample queries from backend with TanStack Query
+  const { data: samplesData } = useQuery({
+    queryKey: ['query-samples'],
+    queryFn: () => queryAPI.getSamples(),
+    staleTime: 5 * 60 * 1000,
+    onError: () => setSampleQueries(defaultSampleQueries)
+  });
+
   useEffect(() => {
-    const loadSamples = async () => {
-      try {
-        const samples = await queryAPI.getSamples();
-        if (samples.status === 'success') {
-          setSampleQueries(samples.samples);
-        }
-      } catch (error) {
-        console.warn('Could not load sample queries:', error);
-        // Fallback to default samples
-        setSampleQueries(defaultSampleQueries);
-      }
-    };
-
-    const loadHistory = async () => {
-      try {
-        const history = await queryAPI.getHistory(10);
-        if (history.status === 'success') {
-          setQueryHistory(history.history);
-        }
-      } catch (error) {
-        console.warn('Could not load query history:', error);
-      }
-    };
-
-    loadSamples();
-    if (liveDemo.isConnected) {
-      loadHistory();
+    if (samplesData?.status === 'success') {
+      setSampleQueries(samplesData.samples);
+    } else if (samplesData) {
+      setSampleQueries(defaultSampleQueries);
     }
-  }, [liveDemo.isConnected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [samplesData]);
+
+  // Load history when connected
+  const { data: historyData, refetch: refetchHistory } = useQuery({
+    queryKey: ['query-history', liveDemo.isConnected],
+    enabled: !!liveDemo.isConnected,
+    queryFn: () => queryAPI.getHistory(10),
+  });
+
+  useEffect(() => {
+    if (historyData?.status === 'success') {
+      setQueryHistory(historyData.history);
+    }
+  }, [historyData]);
 
   const defaultSampleQueries = [
     {
@@ -93,53 +94,44 @@ ORDER BY revenue DESC;`
     dispatch(setCurrentQuery(query));
   };
 
+  const executeMutation = useMutation({
+    mutationFn: (queryData) => queryAPI.execute(queryData),
+    onMutate: () => {
+      dispatch(setLoading(true));
+      dispatch(setError(null));
+    },
+    onSuccess: async (result) => {
+      if (result.success) {
+        dispatch(setQueryResults(result.data || []));
+        await queryClient.invalidateQueries({ queryKey: ['query-history'] });
+        refetchHistory();
+      } else {
+        dispatch(setError(result.error || 'Query execution failed'));
+      }
+    },
+    onError: (error) => {
+      const errorMessage = apiUtils.formatError(error);
+      dispatch(setError(errorMessage));
+    },
+    onSettled: () => {
+      dispatch(setLoading(false));
+    }
+  });
+
   const executeQuery = async () => {
     if (!liveDemo.currentQuery.trim()) {
       dispatch(setError('Please enter a query to execute'));
       return;
     }
-
     if (!liveDemo.isConnected) {
       dispatch(setError('Please connect to database first'));
       return;
     }
-
-    dispatch(setLoading(true));
-    dispatch(setError(null));
-
-    try {
-      const queryData = {
-        query: liveDemo.currentQuery,
-        limit: 1000
-      };
-
-      const result = await queryAPI.execute(queryData);
-      
-      if (result.success) {
-        dispatch(setQueryResults(result.data || []));
-        
-        // Refresh query history
-        try {
-          const history = await queryAPI.getHistory(10);
-          if (history.status === 'success') {
-            setQueryHistory(history.history);
-          }
-        } catch (historyError) {
-          console.warn('Could not refresh history:', historyError);
-        }
-        
-        console.log(`✅ Query executed successfully: ${result.row_count} rows returned`);
-      } else {
-        throw new Error(result.error || 'Query execution failed');
-      }
-      
-    } catch (error) {
-      const errorMessage = apiUtils.formatError(error);
-      dispatch(setError(errorMessage));
-      console.error('❌ Query execution failed:', error);
-    } finally {
-      dispatch(setLoading(false));
-    }
+    const queryData = {
+      query: liveDemo.currentQuery,
+      limit: 1000
+    };
+    await executeMutation.mutateAsync(queryData);
   };
 
   const generateMockQueryResults = (query) => {
@@ -322,19 +314,19 @@ df.head(10)`}
                 <div key={index} className="history-item">
                   <div className="history-meta">
                     <span className="history-time">
-                      {item.timestamp.toLocaleTimeString()}
+                      {item?.timestamp}
                     </span>
                     <span className="history-rows">
-                      {item.rowCount} rows
+                      {item?.rowCount || 0} rows
                     </span>
                   </div>
                   <div className="history-query">
-                    {item.query.slice(0, 100)}
-                    {item.query.length > 100 && '...'}
+                    {item?.query?.slice(0, 100)}
+                    {item?.query?.length > 100 && '...'}
                   </div>
                   <button
                     className="history-load-btn"
-                    onClick={() => loadSampleQuery(item.query)}
+                    onClick={() => loadSampleQuery(item?.query)}
                   >
                     Load
                   </button>

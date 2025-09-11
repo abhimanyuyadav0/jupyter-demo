@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../../redux/slices/jupyterSlice';
-import { databaseAPI, apiUtils } from '../../api/handlers/axios';
+import { databaseService as databaseAPI } from '../../api/services/database';
+import { useMutation } from '@tanstack/react-query';
+import { apiUtils } from '../../api/services/apiUtils';
 import './ConnectionModal.css';
 
 const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
@@ -58,6 +60,10 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
     setLocalConnectionConfig(prev => ({ ...prev, [field]: value }));
   };
 
+  const connectMutation = useMutation({
+    mutationFn: (connectionData) => databaseAPI.connect(connectionData),
+  });
+
   const handleConnect = async () => {
     setIsConnecting(true);
     setConnectionError(null);
@@ -77,7 +83,7 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
         connection_name: finalConnectionName
       };
 
-      const result = await databaseAPI.connect(connectionData);
+      const result = await connectMutation.mutateAsync(connectionData);
       
       if (result.status === 'success') {
         setIsConnected(true);
