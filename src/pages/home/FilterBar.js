@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setFilter, clearFilters } from '../redux/slices/jupyterSlice';
+import { setFilter, clearFilters } from '../../redux/slices/jupyterSlice';
 import './FilterBar.css';
 
 const FilterBar = () => {

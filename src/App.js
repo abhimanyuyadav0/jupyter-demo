@@ -2,23 +2,45 @@ import React, { useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import store from './redux/store';
-import Header from './components/Header';
-import Home from './components/Home';
-import UseCaseDetail from './components/UseCaseDetail';
-import LiveDemo from './components/LiveDemo';
-import { connectionStorage } from './services/connectionStorage';
+import Header from './components/header/Header';
+import HomePage from './pages/home';
 import { loadSavedConnections } from './redux/slices/jupyterSlice';
+import { credentialsAPI } from './services/api';
 import { useDispatch } from 'react-redux';
-import DatabaseExplorer from './components/DatabaseExplorer';
 import './App.css';
+import DatabasePage from './pages/database';
+import ViewDatabasePage from './pages/database/view';
+import UseCasePage from './pages/usecase';
 
 function AppBootstrap() {
   const dispatch = useDispatch();
   useEffect(() => {
-    const saved = connectionStorage.loadConnections();
-    if (saved && Array.isArray(saved)) {
-      dispatch(loadSavedConnections(saved));
-    }
+    const loadServerConnections = async () => {
+      try {
+        // Fetch all to avoid session mismatch hiding existing credentials
+        const server = await credentialsAPI.getConnections(true);
+        const safe = Array.isArray(server) ? server.map(conn => ({
+          id: conn.id,
+          name: conn.name,
+          config: {
+            host: conn.config?.host,
+            port: String(conn.config?.port ?? ''),
+            database: conn.config?.database,
+            username: conn.config?.username,
+            password: ''
+          },
+          type: conn.type,
+          status: conn.status || 'disconnected',
+          lastConnected: conn.lastConnected || null,
+          createdAt: conn.createdAt || null,
+          hasSecureCredentials: !!conn.hasSecureCredentials
+        })) : [];
+        dispatch(loadSavedConnections(safe));
+      } catch (_) {
+        dispatch(loadSavedConnections([]));
+      }
+    };
+    loadServerConnections();
   }, [dispatch]);
   return null;
 }
@@ -32,10 +54,10 @@ function App() {
           <Header />
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/usecase/:id" element={<UseCaseDetail />} />
-              <Route path="/live-demo" element={<LiveDemo />} />
-              <Route path="/live-demo/db/:id" element={<DatabaseExplorer />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/usecase/:id" element={<UseCasePage />} />
+              <Route path="/database" element={<DatabasePage />} />
+              <Route path="/database/:id" element={<ViewDatabasePage />} />
             </Routes>
           </main>
         </div>

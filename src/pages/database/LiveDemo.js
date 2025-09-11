@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 
-  setConnectionStatus, 
-  setConnectionType, 
-  setCurrentQuery, 
-  setQueryResults, 
-  setLoading, 
   setError, 
   setAnalyticsData 
-} from '../redux/slices/jupyterSlice';
+} from '../../redux/slices/jupyterSlice';
 import DatabaseConnection from './DatabaseConnection';
 import QueryEditor from './QueryEditor';
 import DataVisualization from './DataVisualization';

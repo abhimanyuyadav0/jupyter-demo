@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
-import { databaseAPI, apiUtils } from "../services/api";
+import { databaseAPI, apiUtils } from "../../../services/api";
 import {
   setActiveConnection,
   updateConnectionStatus,
   setConnectionStatus,
   setConnectionConfig,
   setConnectionType,
-} from "../redux/slices/jupyterSlice";
+} from "../../../redux/slices/jupyterSlice";
 
 const DatabaseExplorer = () => {
   const { id } = useParams();
@@ -39,7 +39,7 @@ const DatabaseExplorer = () => {
       dispatch(setConnectionStatus("connecting"));
       let password = connection.config.password;
       if (!password) {
-        password = prompt(`Enter password for ${connection.name}:`);
+        password = prompt(`Asking password? Enter password for ${connection.name}:`);
         if (!password) {
           dispatch(setConnectionStatus("disconnected"));
           return false;

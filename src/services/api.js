@@ -7,7 +7,21 @@ import axios from 'axios';
 // API Configuration
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-// Create axios instance with default config
+// Create or reuse a stable per-browser session id to correlate saved credentials
+const getOrCreateSessionId = () => {
+  try {
+    const key = 'jupyter_user_session';
+    let sid = localStorage.getItem(key);
+    if (!sid) {
+      sid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(key, sid);
+    }
+    return sid;
+  } catch {
+    return 'anonymous-session';
+  }
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 seconds timeout
@@ -19,6 +33,10 @@ const apiClient = axios.create({
 // Request interceptor for debugging
 apiClient.interceptors.request.use(
   (config) => {
+    // Attach stable session header so backend can group credentials per user
+    const sessionId = getOrCreateSessionId();
+    config.headers = config.headers || {};
+    config.headers['X-User-Session'] = sessionId;
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
     return config;
   },
@@ -105,8 +123,9 @@ export const credentialsAPI = {
   },
 
   // Get connections for frontend
-  getConnections: async () => {
-    const response = await apiClient.get('/api/credentials/connections');
+  getConnections: async (includeAll = false) => {
+    const url = includeAll ? '/api/credentials/connections?all=true' : '/api/credentials/connections';
+    const response = await apiClient.get(url);
     return response.data;
   },
 

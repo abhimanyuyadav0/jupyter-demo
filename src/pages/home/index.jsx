@@ -1,12 +1,12 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setSelectedUseCase, setFilter } from '../redux/slices/jupyterSlice';
+import { setSelectedUseCase, setFilter } from '../../redux/slices/jupyterSlice';
 import UseCaseCard from './UseCaseCard';
 import Hero from './Hero';
 import FilterBar from './FilterBar';
 import './Home.css';
 
-const Home = () => {
+const HomePage = () => {
   const { useCases, filters } = useSelector((state) => state.jupyter);
   const dispatch = useDispatch();
 
@@ -72,4 +72,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default HomePage;

@@ -12,7 +12,7 @@ const Header = () => {
         </Link>
         <nav className="nav">
           <Link to="/" className="nav-link">Home</Link>
-          <Link to="/live-demo" className="nav-link">Live Demo</Link>
+          <Link to="/database" className="nav-link">Database</Link>
           <a 
             href="https://jupyter.org" 
             target="_blank" 

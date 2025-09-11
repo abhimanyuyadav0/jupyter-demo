@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setActiveConnection } from '../redux/slices/jupyterSlice';
+import { setActiveConnection } from '../../redux/slices/jupyterSlice';
 import './DatabaseSelector.css';
 import ConnectionManager from './ConnectionManager';
 

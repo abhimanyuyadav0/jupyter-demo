@@ -217,21 +217,29 @@ class CredentialService:
         List all active credentials for a user session
         """
         try:
-            query = self.db.query(DatabaseCredential).filter(
-                DatabaseCredential.is_active == True
-            )
+            # Use a fresh session to avoid transaction issues
+            from app.core.database import SessionLocal
+            fresh_db = SessionLocal()
             
-            if user_session:
-                query = query.filter(
-                    or_(
-                        DatabaseCredential.user_session == user_session,
-                        DatabaseCredential.user_session.is_(None)
-                    )
+            try:
+                query = fresh_db.query(DatabaseCredential).filter(
+                    DatabaseCredential.is_active == True
                 )
-            
-            credentials = query.order_by(DatabaseCredential.last_used.desc()).all()
-            
-            return [cred.to_dict() for cred in credentials]
+                
+                if user_session:
+                    query = query.filter(
+                        or_(
+                            DatabaseCredential.user_session == user_session,
+                            DatabaseCredential.user_session.is_(None)
+                        )
+                    )
+                
+                credentials = query.order_by(DatabaseCredential.last_used.desc()).all()
+                
+                return [cred.to_dict() for cred in credentials]
+                
+            finally:
+                fresh_db.close()
             
         except Exception as e:
             logger.error(f"❌ Failed to list credentials: {e}")
@@ -242,21 +250,29 @@ class CredentialService:
         Get credentials formatted for frontend consumption
         """
         try:
-            query = self.db.query(DatabaseCredential).filter(
-                DatabaseCredential.is_active == True
-            )
+            # Use a fresh session to avoid transaction issues
+            from app.core.database import SessionLocal
+            fresh_db = SessionLocal()
             
-            if user_session:
-                query = query.filter(
-                    or_(
-                        DatabaseCredential.user_session == user_session,
-                        DatabaseCredential.user_session.is_(None)
-                    )
+            try:
+                query = fresh_db.query(DatabaseCredential).filter(
+                    DatabaseCredential.is_active == True
                 )
-            
-            credentials = query.order_by(DatabaseCredential.last_used.desc()).all()
-            
-            return [cred.to_connection_config() for cred in credentials]
+                
+                if user_session:
+                    query = query.filter(
+                        or_(
+                            DatabaseCredential.user_session == user_session,
+                            DatabaseCredential.user_session.is_(None)
+                        )
+                    )
+                
+                credentials = query.order_by(DatabaseCredential.last_used.desc()).all()
+                
+                return [cred.to_connection_config() for cred in credentials]
+                
+            finally:
+                fresh_db.close()
             
         except Exception as e:
             logger.error(f"❌ Failed to get connections for frontend: {e}")

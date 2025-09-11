@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 
   removeConnection, 
@@ -9,12 +9,12 @@ import {
   setConnectionStatus,
   setConnectionConfig,
   setConnectionType,
-  setError
-} from '../redux/slices/jupyterSlice';
-import { connectionStorage } from '../services/connectionStorage';
-import { databaseAPI, apiUtils } from '../services/api';
-import { secureStorage } from '../services/secureStorage';
-import ConnectionModal from './ConnectionModal';
+  setError,
+  updateConnectionInList
+} from '../../redux/slices/jupyterSlice';
+import { connectionStorage } from '../../services/connectionStorage';
+import { databaseAPI, apiUtils, credentialsAPI } from '../../services/api';
+import ConnectionModal from '../../components/ConnectionModal';
 import './ConnectionManager.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,18 +27,62 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [connectingTo, setConnectingTo] = useState(null);
+  const [loadingServerConnections, setLoadingServerConnections] = useState(false);
+  const [serverError, setServerError] = useState('');
 
-  // Auto-save connections when they change (avoid redundant writes)
-  const lastSavedRef = useRef('');
+  // Stop auto-saving locally; rely on backend as source of truth
+
+  // Load saved connections from backend on mount and merge with local ones
   useEffect(() => {
-    const serialized = JSON.stringify(liveDemo.connections);
-    if (serialized !== lastSavedRef.current) {
-      if (liveDemo.connections.length > 0) {
-        connectionStorage.saveConnections(liveDemo.connections);
+    let mounted = true;
+    const loadAll = async () => {
+      setLoadingServerConnections(true);
+      setServerError('');
+      try {
+        // Local first
+        const local = connectionStorage.loadConnections();
+        // Server
+        const server = await credentialsAPI.getConnections();
+        const mappedServer = Array.isArray(server) ? server.map(conn => ({
+          id: conn.id,
+          name: conn.name,
+          config: {
+            host: conn.config?.host,
+            port: String(conn.config?.port ?? ''),
+            database: conn.config?.database,
+            username: conn.config?.username,
+            password: ''
+          },
+          type: conn.type,
+          status: conn.status || 'disconnected',
+          lastConnected: conn.lastConnected || null,
+          createdAt: conn.createdAt || null,
+          hasSecureCredentials: !!conn.hasSecureCredentials
+        })) : [];
+
+        // Merge by id; prefer server entries
+        const byId = new Map();
+        [...local, ...mappedServer].forEach(c => {
+          byId.set(String(c.id), c);
+        });
+        const merged = Array.from(byId.values());
+        if (mounted) {
+          dispatch(loadSavedConnections(merged));
+        }
+      } catch (e) {
+        setServerError(apiUtils.formatError(e));
+        // Fallback to just local
+        const local = connectionStorage.loadConnections();
+        if (mounted) {
+          dispatch(loadSavedConnections(local));
+        }
+      } finally {
+        if (mounted) setLoadingServerConnections(false);
       }
-      lastSavedRef.current = serialized;
-    }
-  }, [liveDemo.connections]);
+    };
+    loadAll();
+    return () => { mounted = false; };
+  }, [dispatch]);
 
 
 
@@ -58,6 +102,9 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
   };
 
   const handleConnectToSelected = async (connection) => {
+    console.log('🔍 handleConnectToSelected called with connection:', connection);
+    console.log('🔍 hasSecureCredentials in connect:', connection.hasSecureCredentials);
+    
     if (!connection) return;
     
     setConnectingTo(connection.id);
@@ -73,32 +120,16 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
       // Try to load secure credentials if available
       if (connection.hasSecureCredentials) {
         try {
-          let masterPassword = '';
-          
-          // Check if master password is set
-          if (!secureStorage.hasMasterPassword()) {
-            dispatch(setError('Master password not set. Please set up secure storage first.'));
-            setConnectingTo(null);
-            return;
-          }
-          
-          // Prompt for master password
-          masterPassword = prompt(`Enter master password to unlock credentials for ${connection.name}:`);
-          if (!masterPassword) {
-            setConnectingTo(null);
-            return;
-          }
-          
-          // Load connection with credentials
-          const connectionWithCreds = await connectionStorage.loadConnectionWithCredentials(connection.id, masterPassword);
+          // Get connection with password from backend
+          const connectionWithPassword = await credentialsAPI.getConnectionWithPassword(connection.id);
           connectionData = {
-            ...connectionWithCreds.config,
-            db_type: connection.type
+            ...connectionWithPassword.config,
+            db_type: connectionWithPassword.type
           };
           
-          console.log('🔓 Credentials loaded from secure storage');
+          console.log('🔓 Credentials loaded from backend');
         } catch (error) {
-          console.warn('⚠️ Failed to load secure credentials:', error);
+          console.warn('⚠️ Failed to load secure credentials from backend:', error);
           // Fall back to manual password entry
           const password = prompt(`Failed to load saved credentials. Enter password for ${connection.name}:`);
           if (!password) {
@@ -233,15 +264,88 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
     return `${diffDays}d ago`;
   };
 
-  const handleDoubleClick = (connection) => {
-    // Prime redux with the selected connection so explorer has context
-    dispatch(setActiveConnection(connection.id));
-    // Optionally reflect current status immediately
-    dispatch(setConnectionStatus(connection.status || 'disconnected'));
-    if (onConnectionSelect) {
-      onConnectionSelect(connection);
+  const handleDoubleClick = async (connection) => {
+    console.log('🔍 handleDoubleClick called with connection:', connection);
+    console.log('🔍 hasSecureCredentials:', connection.hasSecureCredentials);
+    console.log('🔍 typeof hasSecureCredentials:', typeof connection.hasSecureCredentials);
+    
+    try {
+      // If connection has secure credentials, connect automatically
+      if (connection.hasSecureCredentials) {
+        console.log('🔍 Connection has secure credentials, proceeding with auto-connect');
+        setConnectingTo(connection.id);
+        dispatch(setError(null));
+
+        // Get connection with password from backend
+        const connectionWithPassword = await credentialsAPI.getConnectionWithPassword(connection.id);
+        
+        let connectionData = {
+          ...connectionWithPassword.config,
+          db_type: connectionWithPassword.type
+        };
+
+        // Test the connection
+        const testResult = await databaseAPI.testConnection(connectionData);
+        
+        if (testResult.success) {
+          // Update connection status to connected
+          dispatch(updateConnectionStatus(connection.id, 'connected'));
+          dispatch(setConnectionConfig(connection.id, connectionData));
+          dispatch(setConnectionType(connection.id, connection.type));
+          
+          // Update the connection in Redux with the password so DatabaseExplorer can use it
+          const updatedConnection = {
+            ...connection,
+            config: {
+              ...connection.config,
+              password: connectionData.password
+            },
+            status: 'connected'
+          };
+          
+          // Update the connection in the connections array
+          dispatch(updateConnectionInList(updatedConnection));
+          
+          console.log('✅ Auto-connected using saved credentials');
+        } else {
+          throw new Error(testResult.error || 'Connection test failed');
+        }
+      }
+
+      // Always navigate regardless of whether we connected or not
+      // Prime redux with the selected connection so explorer has context
+      dispatch(setActiveConnection(connection.id));
+      // Optionally reflect current status immediately
+      dispatch(setConnectionStatus(connection.status || 'disconnected'));
+      if (onConnectionSelect) {
+        onConnectionSelect(connection);
+      }
+      
+      console.log(`🚀 Navigating to /database/${connection.id}`);
+      console.log('Current location before navigate:', window.location.pathname);
+      navigate(`/database/${connection.id}`);
+      console.log('Navigate called, checking location after...');
+      setTimeout(() => {
+        console.log('Location after navigate:', window.location.pathname);
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Auto-connection failed:', error);
+      dispatch(setError(`Auto-connection failed: ${error.message}`));
+      
+      // Still navigate even if connection failed
+      dispatch(setActiveConnection(connection.id));
+      dispatch(setConnectionStatus(connection.status || 'disconnected'));
+      if (onConnectionSelect) {
+        onConnectionSelect(connection);
+      }
+      
+      console.log(`🚀 Navigating to /database/${connection.id} (despite connection error)`);
+      navigate(`/database/${connection.id}`);
+      
+    } finally {
+      setConnectingTo(null);
     }
-    navigate(`/live-demo/db/${connection.id}`);
   };
   // (Removed duplicate handleDoubleClick with incomplete code)
   return (
@@ -318,19 +422,32 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
       )}
 
       <div className="connections-list">
-        {liveDemo.connections.length === 0 ? (
+        {serverError && (
+          <div className="no-connections" style={{ background: '#fef2f2', border: '2px solid #fecaca' }}>
+            <span className="no-conn-icon">⚠️</span>
+            <p style={{ color: '#991b1b' }}>Failed to load server connections</p>
+            <p className="no-conn-help" style={{ color: '#b91c1c' }}>{serverError}</p>
+          </div>
+        )}
+        {loadingServerConnections && (
+          <div className="no-connections">
+            <span className="no-conn-icon">⏳</span>
+            <p>Loading connections…</p>
+            <p className="no-conn-help">Fetching from server and local storage</p>
+          </div>
+        )}
+        {!loadingServerConnections && liveDemo.connections.length === 0 ? (
           <div className="no-connections">
             <span className="no-conn-icon">🔌</span>
             <p>No saved connections</p>
-            <p className="no-conn-help">Connect to a database and save it to see it here</p>
+            <p className="no-conn-help">Connect to a database and check "Save credentials"</p>
           </div>
-        ) : (
+        ) : (!loadingServerConnections && (
           <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', width: '100%' }}>{
             liveDemo.connections.map(connection => (
             <div 
               key={connection.id} 
               className={`connection-card ${selectedConnection?.id === connection.id ? 'selected' : ''} ${connection.status}`}
-              onClick={() => handleSelectConnection(connection)}
             >
               <div className="card-header">
                 <div className="card-status">
@@ -341,6 +458,18 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                 </div>
                 
                 <div className="card-actions">
+                  <button
+                    className="test-nav-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('🧪 Test navigation button clicked');
+                      navigate(`/database/${connection.id}`);
+                    }}
+                    title="Test navigation"
+                    style={{background: 'orange', color: 'white', marginRight: '5px', fontSize: '12px'}}
+                  >
+                    👁️
+                  </button>
                   <button
                     className="edit-btn"
                     onClick={(e) => {
@@ -364,10 +493,20 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
                 </div>
               </div>
 
-              <div className="card-content" onDoubleClick={() => {
-                // Navigate to explorer page on double click
-                handleDoubleClick(connection);
-              }}>
+              <div className="card-content" 
+                onClick={() => {
+                  console.log('🖱️ Single click detected, selecting connection');
+                  handleSelectConnection(connection);
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('🖱️ Double-click detected on connection:', connection.name, connection.id);
+                  console.log('Connection object:', connection);
+                  console.log('Connection hasSecureCredentials:', connection.hasSecureCredentials);
+                  // Navigate to explorer page on double click
+                  handleDoubleClick(connection);
+                }}>
                 {editingConnection === connection.id ? (
                   <input
                     type="text"
@@ -416,7 +555,7 @@ const ConnectionManager = ({ onConnectionSelect, showNewConnection = false }) =>
             </div>
             ))
           }</div>
-        )}
+        ))}
       </div>
 
       {showNewConnection && (

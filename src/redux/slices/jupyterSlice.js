@@ -236,6 +236,15 @@ const jupyterSlice = createSlice({
       if (connection) {
         connection.name = name;
       }
+    },
+    
+    updateConnectionInList: (state, action) => {
+      const updatedConnection = action.payload;
+      const index = state.liveDemo.connections.findIndex(conn => conn.id === updatedConnection.id);
+      
+      if (index !== -1) {
+        state.liveDemo.connections[index] = updatedConnection;
+      }
     }
   }
 });
@@ -259,6 +268,7 @@ export const {
   setActiveConnection,
   updateConnectionStatus,
   loadSavedConnections,
-  updateConnectionName
+  updateConnectionName,
+  updateConnectionInList
 } = jupyterSlice.actions;
 export default jupyterSlice.reducer;

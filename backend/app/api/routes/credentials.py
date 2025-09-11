@@ -181,16 +181,16 @@ async def list_credentials(
 @router.get("/connections", response_model=List[ConnectionConfig])
 async def get_connections(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get connections formatted for frontend
     """
     try:
         credential_service = get_credential_service(db)
-        user_session = get_user_session(request)
         
-        connections = credential_service.get_connections_for_frontend(user_session)
+        # Always get all connections (no user session filtering)
+        connections = credential_service.get_connections_for_frontend(None)
         
         return [ConnectionConfig(**conn) for conn in connections]
         
