@@ -9,7 +9,11 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_manager, DatabaseManager, get_db
+from app.models.credentials import DatabaseCredential
+from app.core.encryption import generate_connection_hash
+from datetime import datetime
 from app.services.credential_service import get_credential_service
+from app.services.credential_service import mark_credential_connected, clear_all_connected_flags
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +109,28 @@ async def connect_database(
         elif credential_duplicate:
             response_message += " (credentials already exist)"
         
+        # Update last_used for matching saved credential (if it exists),
+        # and mark it as connected until an explicit disconnect
+        try:
+            connection_hash = generate_connection_hash(
+                connection_request.host,
+                connection_request.port,
+                connection_request.database,
+                connection_request.username,
+                connection_request.db_type,
+            )
+            cred = db.query(DatabaseCredential).filter(
+                DatabaseCredential.connection_hash == connection_hash
+            ).first()
+            if cred:
+                cred.last_used = datetime.utcnow()
+                db.commit()
+            # Remember the connected credential in-memory
+            mark_credential_connected(connection_hash)
+        except Exception as _:
+            # Non-fatal; proceed without blocking response
+            pass
+
         return DatabaseConnectionResponse(
             status="success",
             message=response_message,
@@ -142,6 +168,8 @@ async def disconnect_database(
     """
     try:
         await db_manager.disconnect()
+        # Clear all connected flags on disconnect (single active connection model)
+        clear_all_connected_flags()
         return {
             "status": "success",
             "message": "Successfully disconnected from database"

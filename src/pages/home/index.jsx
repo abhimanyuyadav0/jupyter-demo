@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setSelectedUseCase, setFilter } from '../../redux/slices/jupyterSlice';
+import { setSelectedUseCase } from '../../redux/slices/jupyterSlice';
 import UseCaseCard from './UseCaseCard';
 import Hero from './Hero';
 import FilterBar from './FilterBar';

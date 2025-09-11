@@ -1,6 +1,4 @@
 import React, { useState } from "react";
-import { useSelector, useDispatch } from "react-redux";
-import { setError } from "../../redux/slices/jupyterSlice";
 import DatabaseConnection from "./DatabaseConnection";
 import QueryEditor from "./QueryEditor";
 import DataVisualization from "./DataVisualization";
@@ -11,10 +9,9 @@ import { apiUtils } from "../../api/services/apiUtils";
 import { useQuery } from "@tanstack/react-query";
 
 const LiveDemo = () => {
-  const dispatch = useDispatch();
-  const { liveDemo } = useSelector((state) => state.jupyter);
   const [activeTab, setActiveTab] = useState("connection");
   const [serverError, setServerError] = useState("");
+  const [selectedDatabase, setSelectedDatabase] = useState(null);
 
   const {
     data: connections,
@@ -60,6 +57,7 @@ const LiveDemo = () => {
         "Monitor live data streams and generate insights automatically",
     },
   ];
+
   return (
     <div className="live-demo">
       <div className="container">
@@ -80,7 +78,7 @@ const LiveDemo = () => {
               key={tab.id}
               className={`tab-button ${activeTab === tab.id ? "active" : ""}`}
               onClick={() => setActiveTab(tab.id)}
-              disabled={tab.id !== "connection" && !liveDemo.isConnected}
+              disabled={tab.id !== "connection" && !selectedDatabase?.id}
             >
               <span className="tab-icon">{tab.icon}</span>
               <span className="tab-label">{tab.label}</span>
@@ -95,6 +93,8 @@ const LiveDemo = () => {
               loadingConnections={loadingServerConnections}
               refetchConnections={refetchConnections}
               serverError={serverError}
+              setSelectedDatabase={setSelectedDatabase}
+              selectedDatabase={selectedDatabase}
             />
           )}
           {activeTab === "query" && (
@@ -103,6 +103,8 @@ const LiveDemo = () => {
               loadingConnections={loadingServerConnections}
               refetchConnections={refetchConnections}
               serverError={serverError}
+              setSelectedDatabase={setSelectedDatabase}
+              connection={selectedDatabase}
             />
           )}
           {activeTab === "visualization" && (
@@ -111,6 +113,7 @@ const LiveDemo = () => {
               loadingConnections={loadingServerConnections}
               refetchConnections={refetchConnections}
               serverError={serverError}
+              setSelectedDatabase={setSelectedDatabase}
             />
           )}
           {activeTab === "analytics" && (
@@ -119,22 +122,10 @@ const LiveDemo = () => {
               loadingConnections={loadingServerConnections}
               refetchConnections={refetchConnections}
               serverError={serverError}
+              setSelectedDatabase={setSelectedDatabase}
             />
           )}
         </div>
-
-        {liveDemo.error && (
-          <div className="error-message">
-            <span className="error-icon">⚠️</span>
-            <span className="error-text">{liveDemo.error}</span>
-            <button
-              className="error-dismiss"
-              onClick={() => dispatch(setError(null))}
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         <div className="demo-info">
           <h3>What You Can Do Here:</h3>

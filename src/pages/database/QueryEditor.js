@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { setCurrentQuery, setQueryResults, setLoading, setError } from '../../redux/slices/jupyterSlice';
 import { queryService as queryAPI } from '../../api/services/query';
 import { apiUtils } from '../../api/services/apiUtils';
 import './QueryEditor.css';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const QueryEditor = () => {
-  const dispatch = useDispatch();
-  const { liveDemo } = useSelector((state) => state.jupyter);
+const QueryEditor = ({ connection }) => {
   const [queryHistory, setQueryHistory] = useState([]);
   const [sampleQueries, setSampleQueries] = useState([]);
+  const [currentQuery, setCurrentQuery] = useState('');
+  const [queryResults, setQueryResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [, setError] = useState(null);
   const queryClient = useQueryClient();
 
   // Load sample queries from backend with TanStack Query
@@ -32,8 +32,8 @@ const QueryEditor = () => {
 
   // Load history when connected
   const { data: historyData, refetch: refetchHistory } = useQuery({
-    queryKey: ['query-history', liveDemo.isConnected],
-    enabled: !!liveDemo.isConnected,
+    queryKey: ['query-history', Boolean(connection)],
+    enabled: Boolean(connection),
     queryFn: () => queryAPI.getHistory(10),
   });
 
@@ -87,69 +87,65 @@ ORDER BY revenue DESC;`
   ];
 
   const handleQueryChange = (e) => {
-    dispatch(setCurrentQuery(e.target.value));
+    setCurrentQuery(e.target.value);
   };
 
   const loadSampleQuery = (query) => {
-    dispatch(setCurrentQuery(query));
+    setCurrentQuery(query);
   };
 
   const executeMutation = useMutation({
     mutationFn: (queryData) => queryAPI.execute(queryData),
     onMutate: () => {
-      dispatch(setLoading(true));
-      dispatch(setError(null));
+      setIsLoading(true);
+      setError(null);
     },
     onSuccess: async (result) => {
       if (result.success) {
-        dispatch(setQueryResults(result.data || []));
+        setQueryResults(result.data || []);
         await queryClient.invalidateQueries({ queryKey: ['query-history'] });
         refetchHistory();
       } else {
-        dispatch(setError(result.error || 'Query execution failed'));
+        setError(result.error || 'Query execution failed');
       }
     },
     onError: (error) => {
       const errorMessage = apiUtils.formatError(error);
-      dispatch(setError(errorMessage));
+      setError(errorMessage);
     },
     onSettled: () => {
-      dispatch(setLoading(false));
+      setIsLoading(false);
     }
   });
 
   const executeQuery = async () => {
-    if (!liveDemo.currentQuery.trim()) {
-      dispatch(setError('Please enter a query to execute'));
-      return;
-    }
-    if (!liveDemo.isConnected) {
-      dispatch(setError('Please connect to database first'));
+    if (!currentQuery.trim()) {
+      setError('Please enter a query to execute');
       return;
     }
     const queryData = {
-      query: liveDemo.currentQuery,
+      query: currentQuery,
       limit: 1000
     };
     await executeMutation.mutateAsync(queryData);
   };
 
   const clearQuery = () => {
-    dispatch(setCurrentQuery(''));
-    dispatch(setQueryResults([]));
+    setCurrentQuery('');
+    setQueryResults([]);
   };
-
+console.log(connection);
   return (
     <div className="query-editor">
       <div className="editor-header">
-        <h3>SQL Query Editor</h3>
+        <h3>SQL Query Editor ({connection?.name})</h3>
         <div className="editor-actions">
           <button 
             className="execute-btn"
             onClick={executeQuery}
-            disabled={liveDemo.isLoading || !liveDemo.currentQuery.trim()}
+            disabled={isLoading || !currentQuery.trim()}
           >
-            {liveDemo.isLoading ? (
+            {isLoading ? (
               <>
                 <span className="spinner small"></span>
                 Executing...
@@ -164,7 +160,7 @@ ORDER BY revenue DESC;`
           <button 
             className="clear-btn"
             onClick={clearQuery}
-            disabled={liveDemo.isLoading}
+            disabled={isLoading}
           >
             <span className="btn-icon">🗑️</span>
             Clear
@@ -182,7 +178,7 @@ ORDER BY revenue DESC;`
                   key={index}
                   className="sample-btn"
                   onClick={() => loadSampleQuery(sample.query)}
-                  disabled={liveDemo.isLoading}
+                  disabled={isLoading}
                 >
                   {sample.name}
                 </button>
@@ -192,21 +188,21 @@ ORDER BY revenue DESC;`
 
           <div className="query-input">
             <textarea
-              value={liveDemo.currentQuery}
+              value={currentQuery}
               onChange={handleQueryChange}
               placeholder="Enter your SQL query here..."
               className="query-textarea"
-              disabled={liveDemo.isLoading}
+              disabled={isLoading}
             />
           </div>
         </div>
 
-        {liveDemo.queryResults.length > 0 && (
+        {queryResults.length > 0 && (
           <div className="query-results">
             <div className="results-header">
               <h4>Query Results</h4>
               <span className="result-count">
-                {liveDemo.queryResults.length} rows returned
+                {queryResults.length} rows returned
               </span>
             </div>
             
@@ -214,13 +210,13 @@ ORDER BY revenue DESC;`
               <table className="results-table">
                 <thead>
                   <tr>
-                    {Object.keys(liveDemo.queryResults[0] || {}).map(key => (
+                    {Object.keys(queryResults[0] || {}).map(key => (
                       <th key={key}>{key}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {liveDemo.queryResults.map((row, index) => (
+                  {queryResults.map((row, index) => (
                     <tr key={index}>
                       {Object.values(row).map((value, cellIndex) => (
                         <td key={cellIndex}>{value}</td>
@@ -239,14 +235,14 @@ ORDER BY revenue DESC;`
 import pandas as pd
 
 query = """
-${liveDemo.currentQuery}
+${currentQuery}
 """
 
 # Execute query
 df = pd.read_sql_query(query, conn)
 
 # Display results
-print(f"Query returned {liveDemo.queryResults.length} rows")
+print(f"Query returned ${queryResults.length} rows")
 df.head(10)`}
                 </pre>
               </div>

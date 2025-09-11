@@ -15,21 +15,21 @@ const ConnectionManager = ({
   loadingConnections,
   refetchConnections,
   serverError,
+  setSelectedDatabase,
+  selectedDatabase,
 }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [editingConnection, setEditingConnection] = useState(null);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
-  const [selectedConnection, setSelectedConnection] = useState(null);
   const [connectingTo, setConnectingTo] = useState(null);
 
   console.log("connections:", connections);
 
   const handleSelectConnection = (connection) => {
     // Just select the connection, don't connect automatically
-    setSelectedConnection(connection);
-
+    setSelectedDatabase(connection);
 
     // Notify parent component
     if (onConnectionSelect) {
@@ -91,8 +91,12 @@ const ConnectionManager = ({
       const result = await databaseAPI.connect(connectionData);
 
       if (result.status === "success") {
-        // Update connection status
-       
+        if (refetchConnections) {
+          // Give backend a moment to persist last_used, then refetch
+          setTimeout(() => {
+            refetchConnections();
+          }, 300);
+        }
 
         console.log("✅ Connected to saved database:", connection.name);
       } else {
@@ -116,6 +120,11 @@ const ConnectionManager = ({
       await databaseAPI.disconnect();
 
       console.log("✅ Disconnected from database:", connection.name);
+      if (refetchConnections) {
+        setTimeout(() => {
+          refetchConnections();
+        }, 200);
+      }
     } catch (error) {
       console.warn("⚠️ Error disconnecting:", error);
       // Force disconnect in UI even if API call failed
@@ -263,15 +272,15 @@ const ConnectionManager = ({
       <div className="manager-header">
         <h3>Database Connections</h3>
         <div className="manager-actions">
-          {selectedConnection && (
+          {selectedDatabase && (
             <>
-              {selectedConnection.status === "connected" ? (
+              {selectedDatabase.status === "connected" ? (
                 <button
                   className="disconnect-current-btn"
                   onClick={() =>
-                    handleDisconnectFromSelected(selectedConnection)
+                    handleDisconnectFromSelected(selectedDatabase)
                   }
-                  disabled={connectingTo === selectedConnection.id}
+                  disabled={connectingTo === selectedDatabase.id}
                 >
                   <span className="btn-icon">🔌</span>
                   Disconnect
@@ -279,10 +288,10 @@ const ConnectionManager = ({
               ) : (
                 <button
                   className="connect-current-btn"
-                  onClick={() => handleConnectToSelected(selectedConnection)}
-                  disabled={connectingTo === selectedConnection.id}
+                  onClick={() => handleConnectToSelected(selectedDatabase)}
+                  disabled={connectingTo === selectedDatabase.id}
                 >
-                  {connectingTo === selectedConnection.id ? (
+                  {connectingTo === selectedDatabase.id ? (
                     <>
                       <span className="spinner"></span>
                       Connecting...
@@ -380,7 +389,7 @@ const ConnectionManager = ({
                 <div
                   key={connection.id}
                   className={`connection-card ${
-                    selectedConnection?.id === connection.id ? "selected" : ""
+                    selectedDatabase?.id === connection.id ? "selected" : ""
                   } ${connection.status}`}
                 >
                   <div className="card-header">
@@ -505,7 +514,7 @@ const ConnectionManager = ({
                     </div>
                   </div>
 
-                  {selectedConnection?.id === connection.id && (
+                  {selectedDatabase?.id === connection.id && (
                     <div className="selected-indicator">
                       <span>✓</span>
                     </div>

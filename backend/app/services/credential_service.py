@@ -18,6 +18,34 @@ from app.core.encryption import (
 logger = logging.getLogger(__name__)
 
 
+# In-memory flags for connected credentials (persists until server restarts)
+CONNECTED_CONNECTION_HASHES: set = set()
+
+def mark_credential_connected(connection_hash: str) -> None:
+    try:
+        if connection_hash:
+            CONNECTED_CONNECTION_HASHES.add(connection_hash)
+    except Exception:
+        pass
+
+def clear_credential_connected(connection_hash: str) -> None:
+    try:
+        CONNECTED_CONNECTION_HASHES.discard(connection_hash)
+    except Exception:
+        pass
+
+def clear_all_connected_flags() -> None:
+    try:
+        CONNECTED_CONNECTION_HASHES.clear()
+    except Exception:
+        pass
+
+def is_credential_connected(connection_hash: str) -> bool:
+    try:
+        return connection_hash in CONNECTED_CONNECTION_HASHES
+    except Exception:
+        return False
+
 class CredentialService:
     """
     Service for managing database credentials
@@ -269,7 +297,18 @@ class CredentialService:
                 
                 credentials = query.order_by(DatabaseCredential.last_used.desc()).all()
                 
-                return [cred.to_connection_config() for cred in credentials]
+                # Build connection configs and set status based on persistent connect flags
+                results: List[Dict[str, Any]] = []
+                for cred in credentials:
+                    cfg = cred.to_connection_config()
+                    try:
+                        if is_credential_connected(cred.connection_hash):
+                            cfg["status"] = "connected"
+                    except Exception:
+                        pass
+                    results.append(cfg)
+                
+                return results
                 
             finally:
                 fresh_db.close()
