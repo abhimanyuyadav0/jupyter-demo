@@ -261,68 +261,6 @@ const AnalyticsPanel = ({connections, loadingConnections, refetchConnections, se
           ))}
         </div>
 
-        {/* Real-time Stream */}
-        <div className="real-time-section">
-          <div className="section-header">
-            <h4>Real-time Data Stream</h4>
-            <div className="stream-status">
-              <span
-                className={`status-dot ${
-                  isStreaming && wsConnected ? "active" : ""
-                }`}
-              ></span>
-              <span>
-                {!wsConnected
-                  ? "Disconnected"
-                  : isStreaming
-                  ? "Streaming"
-                  : "Stopped"}
-              </span>
-            </div>
-          </div>
-
-          <div className="stream-data">
-            {realTimeData.length === 0 ? (
-              <div className="no-stream-data">
-                <span className="stream-icon">📡</span>
-                <p>
-                  {!wsConnected
-                    ? "WebSocket disconnected - reconnecting..."
-                    : 'Click "Start Stream" to begin receiving real-time data'}
-                </p>
-              </div>
-            ) : (
-              <div className="data-stream">
-                {realTimeData
-                  .slice(-10)
-                  .reverse()
-                  .map((dataPoint, index) => (
-                    <div key={index} className="data-point">
-                      <div className="data-timestamp">
-                        {dataPoint?.timestamp?.toLocaleTimeString()}
-                      </div>
-                      <div className="data-values">
-                        <span className="data-item">
-                          <strong>Users:</strong> {dataPoint.users}
-                        </span>
-                        <span className="data-item">
-                          <strong>Transactions:</strong>{" "}
-                          {dataPoint.transactions}
-                        </span>
-                        <span className="data-item">
-                          <strong>Revenue:</strong> ${dataPoint.revenue}
-                        </span>
-                        <span className="data-item">
-                          <strong>Value:</strong> {dataPoint.value}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Analytics Insights */}
         <div className="insights-section">
           <h4>AI-Powered Insights</h4>

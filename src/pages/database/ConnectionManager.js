@@ -1,16 +1,4 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
-import {
-  setActiveConnection,
-  updateConnectionStatus,
-  loadSavedConnections,
-  updateConnectionName,
-  setConnectionStatus,
-  setConnectionConfig,
-  setConnectionType,
-  setError,
-  updateConnectionInList,
-} from "../../redux/slices/jupyterSlice";
 import { connectionStorage } from "../../api/services/connections/connectionStorage";
 import { databaseService as databaseAPI } from "../../api/services/database";
 import { credentialsService as credentialsAPI } from "../../api/services/credentials";
@@ -18,17 +6,17 @@ import { apiUtils } from "../../api/services/apiUtils";
 import ConnectionModal from "./ConnectionModal";
 import "./ConnectionManager.css";
 import { useNavigate } from "react-router-dom";
-import { QueryClient, useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const ConnectionManager = ({
   onConnectionSelect,
   showNewConnection = false,
   connections,
   loadingConnections,
-  // refetchConnections,
+  refetchConnections,
   serverError,
 }) => {
-  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [editingConnection, setEditingConnection] = useState(null);
   const [showImportExport, setShowImportExport] = useState(false);
@@ -41,11 +29,7 @@ const ConnectionManager = ({
   const handleSelectConnection = (connection) => {
     // Just select the connection, don't connect automatically
     setSelectedConnection(connection);
-    dispatch(setActiveConnection(connection.id));
 
-    // Update Redux state with connection details
-    dispatch(setConnectionConfig(connection.config));
-    dispatch(setConnectionType(connection.type));
 
     // Notify parent component
     if (onConnectionSelect) {
@@ -54,21 +38,11 @@ const ConnectionManager = ({
   };
 
   const handleConnectToSelected = async (connection) => {
-    console.log(
-      "🔍 handleConnectToSelected called with connection:",
-      connection
-    );
-    console.log(
-      "🔍 hasSecureCredentials in connect:",
-      connection.hasSecureCredentials
-    );
-
     if (!connection) return;
 
     setConnectingTo(connection.id);
 
     try {
-      dispatch(setError(null));
 
       let connectionData = {
         ...connection.config,
@@ -118,33 +92,18 @@ const ConnectionManager = ({
 
       if (result.status === "success") {
         // Update connection status
-        dispatch(
-          updateConnectionStatus({
-            connectionId: connection.id,
-            status: "connected",
-            lastConnected: new Date().toISOString(),
-          })
-        );
-
-        dispatch(setConnectionStatus("connected"));
+       
 
         console.log("✅ Connected to saved database:", connection.name);
       } else {
         throw new Error(result.message || "Connection failed");
       }
     } catch (error) {
-      dispatch(
-        updateConnectionStatus({
-          connectionId: connection.id,
-          status: "disconnected",
-        })
-      );
+     
 
       const errorMessage = apiUtils.formatError(error);
-      dispatch(
-        setError(`Failed to connect to ${connection.name}: ${errorMessage}`)
-      );
-      console.error("❌ Connection failed:", error);
+     
+      console.error("❌ Connection failed:", errorMessage);
     }
 
     setConnectingTo(null);
@@ -156,26 +115,11 @@ const ConnectionManager = ({
     try {
       await databaseAPI.disconnect();
 
-      dispatch(
-        updateConnectionStatus({
-          connectionId: connection.id,
-          status: "disconnected",
-        })
-      );
-
-      dispatch(setConnectionStatus("disconnected"));
-
       console.log("✅ Disconnected from database:", connection.name);
     } catch (error) {
       console.warn("⚠️ Error disconnecting:", error);
       // Force disconnect in UI even if API call failed
-      dispatch(
-        updateConnectionStatus({
-          connectionId: connection.id,
-          status: "disconnected",
-        })
-      );
-      dispatch(setConnectionStatus("disconnected"));
+     
     }
   };
 
@@ -183,7 +127,7 @@ const ConnectionManager = ({
     mutationFn: (connectionId) =>
       connectionStorage.removeConnection(connectionId),
     onSuccess: () => {
-      QueryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
     },
   });
   const handleDeleteConnection = (connectionId) => {
@@ -192,7 +136,6 @@ const ConnectionManager = ({
 
   const handleRenameConnection = (connectionId, newName) => {
     if (newName.trim()) {
-      dispatch(updateConnectionName({ connectionId, name: newName.trim() }));
       setEditingConnection(null);
     }
   };
@@ -207,11 +150,10 @@ const ConnectionManager = ({
       connectionStorage
         .importConnections(file)
         .then((connections) => {
-          dispatch(loadSavedConnections(connections));
           console.log("✅ Connections imported successfully");
         })
         .catch((error) => {
-          dispatch(setError(`Import failed: ${error.message}`));
+          console.error("❌ Import failed:", error);
         });
     }
   };
@@ -260,7 +202,7 @@ const ConnectionManager = ({
           "🔍 Connection has secure credentials, proceeding with auto-connect"
         );
         setConnectingTo(connection.id);
-        dispatch(setError(null));
+        
 
         // Get connection with password from backend
         const connectionWithPassword =
@@ -275,35 +217,14 @@ const ConnectionManager = ({
         const testResult = await databaseAPI.testConnection(connectionData);
 
         if (testResult.success) {
-          // Update connection status to connected
-          dispatch(updateConnectionStatus(connection.id, "connected"));
-          dispatch(setConnectionConfig(connection.id, connectionData));
-          dispatch(setConnectionType(connection.id, connection.type));
-
-          // Update the connection in Redux with the password so DatabaseExplorer can use it
-          const updatedConnection = {
-            ...connection,
-            config: {
-              ...connection.config,
-              password: connectionData.password,
-            },
-            status: "connected",
-          };
-
-          // Update the connection in the connections array
-          dispatch(updateConnectionInList(updatedConnection));
-
+         refetchConnections();
           console.log("✅ Auto-connected using saved credentials");
         } else {
           throw new Error(testResult.error || "Connection test failed");
         }
       }
 
-      // Always navigate regardless of whether we connected or not
-      // Prime redux with the selected connection so explorer has context
-      dispatch(setActiveConnection(connection.id));
-      // Optionally reflect current status immediately
-      dispatch(setConnectionStatus(connection.status || "disconnected"));
+   
       if (onConnectionSelect) {
         onConnectionSelect(connection);
       }
@@ -320,11 +241,10 @@ const ConnectionManager = ({
       }, 100);
     } catch (error) {
       console.error("❌ Auto-connection failed:", error);
-      dispatch(setError(`Auto-connection failed: ${error.message}`));
+     
 
       // Still navigate even if connection failed
-      dispatch(setActiveConnection(connection.id));
-      dispatch(setConnectionStatus(connection.status || "disconnected"));
+     
       if (onConnectionSelect) {
         onConnectionSelect(connection);
       }
@@ -475,11 +395,11 @@ const ConnectionManager = ({
 
                     <div className="card-actions">
                       <button
-                        className="test-nav-btn"
+                        className="edit-btn"
                         onClick={(e) => {
                           navigate(`/database/${connection.id}`);
                         }}
-                        title="Test navigation"
+                        title="View connection"
                         style={{
                           background: "orange",
                           color: "white",
@@ -615,7 +535,6 @@ const ConnectionManager = ({
             "✅ New connection created:",
             newConnection.name || "Temporary connection"
           );
-          // Modal will handle Redux updates
         }}
       />
     </div>

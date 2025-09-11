@@ -1,67 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../../redux/slices/jupyterSlice';
-import { databaseService as databaseAPI } from '../../api/services/database';
-import { useMutation } from '@tanstack/react-query';
-import { apiUtils } from '../../api/services/apiUtils';
-import './ConnectionModal.css';
+import React, { useState, useEffect } from "react";
+import { databaseService as databaseAPI } from "../../api/services/database";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiUtils } from "../../api/services/apiUtils";
+import "./ConnectionModal.css";
 
 const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
-  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const [connectionConfig, setLocalConnectionConfig] = useState({
-    host: 'localhost',
-    port: '5432',
-    database: 'jupyter_db',
-    username: 'postgres',
-    password: ''
+    host: "localhost",
+    port: "5432",
+    database: "jupyter_db",
+    username: "postgres",
+    password: "",
   });
-  const [selectedType, setSelectedType] = useState('postgresql');
+  const [selectedType, setSelectedType] = useState("postgresql");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionName, setConnectionName] = useState('');
+  const [connectionName, setConnectionName] = useState("");
   const [saveCredentials, setSaveCredentials] = useState(false);
 
   const databaseTypes = [
-    { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', port: '5432', color: '#336791' },
-    { id: 'mysql', name: 'MySQL', icon: '🐬', port: '3306', color: '#4479A1' },
-    { id: 'mongodb', name: 'MongoDB', icon: '🍃', port: '27017', color: '#47A248' },
-    { id: 'sqlite', name: 'SQLite', icon: '💎', port: 'N/A', color: '#003B57' }
+    {
+      id: "postgresql",
+      name: "PostgreSQL",
+      icon: "🐘",
+      port: "5432",
+      color: "#336791",
+    },
+    { id: "mysql", name: "MySQL", icon: "🐬", port: "3306", color: "#4479A1" },
+    {
+      id: "mongodb",
+      name: "MongoDB",
+      icon: "🍃",
+      port: "27017",
+      color: "#47A248",
+    },
+    { id: "sqlite", name: "SQLite", icon: "💎", port: "N/A", color: "#003B57" },
   ];
 
   useEffect(() => {
     if (isOpen) {
-      // Reset form when modal opens
-      setConnectionConfig({
-        host: 'localhost',
-        port: '5432',
-        database: 'jupyter_db',
-        username: 'postgres',
-        password: ''
-      });
-      setSelectedType('postgresql');
+      setSelectedType("postgresql");
       setIsConnecting(false);
       setConnectionError(null);
       setIsConnected(false);
-      setConnectionName('');
+      setConnectionName("");
       setSaveCredentials(false);
     }
   }, [isOpen]);
 
   const handleTypeChange = (type) => {
     setSelectedType(type);
-    const dbType = databaseTypes.find(db => db.id === type);
-    if (dbType && dbType.port !== 'N/A') {
-      setLocalConnectionConfig(prev => ({ ...prev, port: dbType.port }));
+    const dbType = databaseTypes.find((db) => db.id === type);
+    if (dbType && dbType.port !== "N/A") {
+      setLocalConnectionConfig((prev) => ({ ...prev, port: dbType.port }));
     }
   };
 
   const handleConfigChange = (field, value) => {
-    setLocalConnectionConfig(prev => ({ ...prev, [field]: value }));
+    setLocalConnectionConfig((prev) => ({ ...prev, [field]: value }));
   };
 
   const connectMutation = useMutation({
     mutationFn: (connectionData) => databaseAPI.connect(connectionData),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      console.log("✅ Successfully connected to database:", data);
+    },
+    onError: (error) => {
+      console.error("❌ Database connection failed:", error);
+    },
   });
 
   const handleConnect = async () => {
@@ -70,8 +79,10 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
 
     try {
       // Generate connection name for backend
-      const finalConnectionName = connectionName.trim() || `${connectionConfig.database}@${connectionConfig.host}:${connectionConfig.port}`;
-      
+      const finalConnectionName =
+        connectionName.trim() ||
+        `${connectionConfig.database}@${connectionConfig.host}:${connectionConfig.port}`;
+
       const connectionData = {
         host: connectionConfig.host,
         port: parseInt(connectionConfig.port),
@@ -80,61 +91,56 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
         password: connectionConfig.password,
         db_type: selectedType,
         save_credentials: saveCredentials,
-        connection_name: finalConnectionName
+        connection_name: finalConnectionName,
       };
 
       const result = await connectMutation.mutateAsync(connectionData);
-      
-      if (result.status === 'success') {
+
+      if (result.status === "success") {
         setIsConnected(true);
-        
+
         // Create connection object for frontend
-        const connectionId = result.credential_info?.id || Date.now().toString();
+        const connectionId =
+          result.credential_info?.id || Date.now().toString();
         const newConnection = {
           id: connectionId,
           name: finalConnectionName,
           config: {
             ...connectionConfig,
-            password: '' // Don't store password in Redux
+            password: "", // Don't store password in Redux
           },
           type: selectedType,
-          status: 'connected',
+          status: "connected",
           lastConnected: new Date().toISOString(),
-          hasSecureCredentials: result.credential_saved || result.credential_duplicate
+          hasSecureCredentials:
+            result.credential_saved || result.credential_duplicate,
         };
+        console.log(
+          "✅ Successfully connected to database:",
+          result.connection_info
+        );
 
-        // Add to Redux store
-        dispatch(addConnection(newConnection));
-        dispatch(setActiveConnection(connectionId));
-        dispatch(setConnectionStatus('connected'));
-        dispatch(setConnectionConfig(connectionConfig));
-        dispatch(setConnectionType(selectedType));
-        
-        console.log('✅ Successfully connected to database:', result.connection_info);
-        
         if (result.credential_saved) {
-          console.log('🔒 Credentials saved securely to backend');
+          console.log("🔒 Credentials saved securely to backend");
         } else if (result.credential_duplicate) {
-          console.log('🔄 Credentials already exist in backend');
+          console.log("🔄 Credentials already exist in backend");
         }
-        
+
         // Call success callback and close modal immediately
         if (onSuccess) {
           onSuccess(newConnection);
         }
         onClose();
       } else {
-        throw new Error(result.message || 'Connection failed');
+        throw new Error(result.message || "Connection failed");
       }
     } catch (error) {
       const errorMessage = apiUtils.formatError(error);
       setConnectionError(errorMessage);
-      console.error('❌ Database connection failed:', error);
+      console.error("❌ Database connection failed:", error);
     }
-    
     setIsConnecting(false);
   };
-
 
   if (!isOpen) return null;
 
@@ -153,13 +159,15 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
           <div className="section">
             <h3>Select Database Type</h3>
             <div className="db-type-grid">
-              {databaseTypes.map(db => (
+              {databaseTypes.map((db) => (
                 <button
                   key={db.id}
-                  className={`db-type-card ${selectedType === db.id ? 'selected' : ''}`}
+                  className={`db-type-card ${
+                    selectedType === db.id ? "selected" : ""
+                  }`}
                   onClick={() => handleTypeChange(db.id)}
                   disabled={isConnecting}
-                  style={{ '--db-color': db.color }}
+                  style={{ "--db-color": db.color }}
                 >
                   <span className="db-icon">{db.icon}</span>
                   <span className="db-name">{db.name}</span>
@@ -179,7 +187,7 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                   <input
                     type="text"
                     value={connectionConfig.host}
-                    onChange={(e) => handleConfigChange('host', e.target.value)}
+                    onChange={(e) => handleConfigChange("host", e.target.value)}
                     placeholder="localhost"
                     disabled={isConnecting || isConnected}
                   />
@@ -189,9 +197,11 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                   <input
                     type="text"
                     value={connectionConfig.port}
-                    onChange={(e) => handleConfigChange('port', e.target.value)}
+                    onChange={(e) => handleConfigChange("port", e.target.value)}
                     placeholder="5432"
-                    disabled={isConnecting || isConnected || selectedType === 'sqlite'}
+                    disabled={
+                      isConnecting || isConnected || selectedType === "sqlite"
+                    }
                   />
                 </div>
               </div>
@@ -201,7 +211,9 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                 <input
                   type="text"
                   value={connectionConfig.database}
-                  onChange={(e) => handleConfigChange('database', e.target.value)}
+                  onChange={(e) =>
+                    handleConfigChange("database", e.target.value)
+                  }
                   placeholder="analytics_db"
                   disabled={isConnecting || isConnected}
                 />
@@ -218,14 +230,16 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                 />
               </div>
 
-              {selectedType !== 'sqlite' && (
+              {selectedType !== "sqlite" && (
                 <div className="form-row">
                   <div className="form-field">
                     <label>Username</label>
                     <input
                       type="text"
                       value={connectionConfig.username}
-                      onChange={(e) => handleConfigChange('username', e.target.value)}
+                      onChange={(e) =>
+                        handleConfigChange("username", e.target.value)
+                      }
                       placeholder="username"
                       disabled={isConnecting || isConnected}
                     />
@@ -235,7 +249,9 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                     <input
                       type="password"
                       value={connectionConfig.password}
-                      onChange={(e) => handleConfigChange('password', e.target.value)}
+                      onChange={(e) =>
+                        handleConfigChange("password", e.target.value)
+                      }
                       placeholder="password"
                       disabled={isConnecting || isConnected}
                     />
@@ -253,15 +269,17 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
                     disabled={isConnecting || isConnected}
                   />
                   <label htmlFor="saveCredentials">
-                    🔒 Save credentials securely on server (no need to enter password again)
+                    🔒 Save credentials securely on server (no need to enter
+                    password again)
                   </label>
                 </div>
-                
+
                 {saveCredentials && (
                   <div className="security-info">
                     <div className="info-message">
                       <span className="info-icon">🛡️</span>
-                      Credentials will be encrypted and stored securely on the backend server
+                      Credentials will be encrypted and stored securely on the
+                      backend server
                     </div>
                   </div>
                 )}
@@ -283,8 +301,6 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
               Successfully connected to database!
             </div>
           )}
-
-
         </div>
 
         {/* Modal Actions */}
@@ -295,7 +311,11 @@ const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {
           <button
             className="connect-btn"
             onClick={handleConnect}
-            disabled={isConnecting || !connectionConfig.host || !connectionConfig.database}
+            disabled={
+              isConnecting ||
+              !connectionConfig.host ||
+              !connectionConfig.database
+            }
           >
             {isConnecting ? (
               <>

@@ -134,58 +134,6 @@ ORDER BY revenue DESC;`
     await executeMutation.mutateAsync(queryData);
   };
 
-  const generateMockQueryResults = (query) => {
-    const results = [];
-    const queryLower = query.toLowerCase();
-    
-    // Generate different mock data based on query content
-    if (queryLower.includes('user')) {
-      for (let i = 0; i < 15; i++) {
-        results.push({
-          user_id: `user_${1000 + i}`,
-          total_sessions: Math.floor(Math.random() * 50) + 5,
-          avg_duration: (Math.random() * 3600).toFixed(2),
-          total_revenue: (Math.random() * 1000).toFixed(2)
-        });
-      }
-    } else if (queryLower.includes('sales') || queryLower.includes('order')) {
-      const months = ['2023-01', '2023-02', '2023-03', '2023-04', '2023-05', '2023-06'];
-      months.forEach(month => {
-        results.push({
-          month,
-          total_orders: Math.floor(Math.random() * 500) + 100,
-          total_revenue: (Math.random() * 50000 + 10000).toFixed(2),
-          avg_order_value: (Math.random() * 200 + 50).toFixed(2)
-        });
-      });
-    } else if (queryLower.includes('product')) {
-      const products = ['Laptop Pro', 'Wireless Mouse', 'Keyboard', 'Monitor', 'Headphones'];
-      const categories = ['Electronics', 'Accessories', 'Computing'];
-      
-      products.forEach(product => {
-        results.push({
-          product_name: product,
-          category: categories[Math.floor(Math.random() * categories.length)],
-          units_sold: Math.floor(Math.random() * 200) + 50,
-          revenue: (Math.random() * 10000 + 1000).toFixed(2),
-          unique_customers: Math.floor(Math.random() * 100) + 20
-        });
-      });
-    } else {
-      // Generic results
-      for (let i = 0; i < 10; i++) {
-        results.push({
-          id: i + 1,
-          name: `Record ${i + 1}`,
-          value: Math.floor(Math.random() * 1000),
-          created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString()
-        });
-      }
-    }
-    
-    return results;
-  };
-
   const clearQuery = () => {
     dispatch(setCurrentQuery(''));
     dispatch(setQueryResults([]));

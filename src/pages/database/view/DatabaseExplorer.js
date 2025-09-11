@@ -15,6 +15,7 @@ const DatabaseExplorer = () => {
     refetch: refetchConnection,
   } = useQuery({
     queryKey: ["connection", id],
+    enabled: !!id,
     queryFn: () => connectionStorage.getConnectionById(id),
     onError: (error) => {
       console.error(apiUtils.formatError(error));
@@ -107,11 +108,11 @@ const DatabaseExplorer = () => {
       ) : (
         <div>
           <h3 style={{ marginTop: 0 }}>Tables</h3>
-          {schema.tables.length === 0 ? (
+          {schema?.tables?.length === 0 ? (
             <div style={{ color: "#64748b" }}>No tables found.</div>
           ) : (
             <div style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {schema.tables.map((t) => (
+              {schema?.tables?.map((t) => (
                 <div key={t.name || t}>
                   <div
                     style={{

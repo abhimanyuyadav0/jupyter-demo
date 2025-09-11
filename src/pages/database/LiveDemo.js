@@ -63,7 +63,7 @@ const LiveDemo = () => {
   return (
     <div className="live-demo">
       <div className="container">
-        <div className="demo-header">
+        {/* <div className="demo-header">
           <h1 className="demo-title">
             <span className="demo-icon">🚀</span>
             Live Jupyter Demo
@@ -72,7 +72,7 @@ const LiveDemo = () => {
             Connect to your database and perform real-time analytics using
             Jupyter-like interface
           </p>
-        </div>
+        </div> */}
 
         <div className="demo-tabs">
           {tabs.map((tab) => (
