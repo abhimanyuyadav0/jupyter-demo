@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setAnalyticsData, setRealTimeData } from '../../redux/slices/jupyterSlice';
-import { analyticsAPI, websocketManager, apiUtils } from '../../services/api';
 import './AnalyticsPanel.css';
+import { analyticsAPI, websocketManager, apiUtils } from '../../api/handlers/axios';
 
 const AnalyticsPanel = () => {
   const dispatch = useDispatch();

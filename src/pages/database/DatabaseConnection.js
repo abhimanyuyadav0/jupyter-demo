@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { apiUtils } from '../../services/api';
+import { apiUtils } from '../../api/handlers/axios';
 import ConnectionManager from './ConnectionManager';
 import './DatabaseConnection.css';
 

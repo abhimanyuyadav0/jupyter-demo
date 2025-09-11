@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setCurrentQuery, setQueryResults, setLoading, setError } from '../../redux/slices/jupyterSlice';
-import { queryAPI, apiUtils } from '../../services/api';
+import { queryAPI, apiUtils } from '../../api/handlers/axios';
 import './QueryEditor.css';
 
 const QueryEditor = () => {

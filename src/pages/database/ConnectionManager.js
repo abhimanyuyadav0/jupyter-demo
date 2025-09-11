@@ -12,9 +12,9 @@ import {
   setError,
   updateConnectionInList
 } from '../../redux/slices/jupyterSlice';
-import { connectionStorage } from '../../services/connectionStorage';
-import { databaseAPI, apiUtils, credentialsAPI } from '../../services/api';
-import ConnectionModal from '../../components/ConnectionModal';
+import { connectionStorage } from '../../api/services/connections/connectionStorage';
+import { databaseAPI, apiUtils, credentialsAPI } from '../../api/handlers/axios';
+import ConnectionModal from './ConnectionModal';
 import './ConnectionManager.css';
 import { useNavigate } from 'react-router-dom';
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
-import { databaseAPI, apiUtils } from "../../../services/api";
+import { databaseAPI, apiUtils } from "../../../api/handlers/axios";
 import {
   setActiveConnection,
   updateConnectionStatus,

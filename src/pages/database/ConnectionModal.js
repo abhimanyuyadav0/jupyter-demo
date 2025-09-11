@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
-import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../redux/slices/jupyterSlice';
-import { databaseAPI, apiUtils } from '../services/api';
+import { setConnectionStatus, setConnectionType, setConnectionConfig, addConnection, setActiveConnection } from '../../redux/slices/jupyterSlice';
+import { databaseAPI, apiUtils } from '../../api/handlers/axios';
 import './ConnectionModal.css';
 
 const ConnectionModal = ({ isOpen, onClose, onSuccess }) => {

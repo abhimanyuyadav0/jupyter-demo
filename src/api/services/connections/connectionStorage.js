@@ -3,7 +3,7 @@
  * Manages saving and loading database connections from localStorage
  */
 
-import { secureStorage } from './secureStorage';
+import { secureStorage } from '../secureStorage';
 
 const STORAGE_KEY = 'jupyter_database_connections';
 
